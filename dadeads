@@ -577,7 +577,10 @@ function Library:Load(Parameters)
             Params.Size = Font[2]
             Params.Width = ScreenSize.X
 
-            local Bounds = GetTextBoundsAsync(TextService, Params)
+if typeof(Params.Font) == "EnumItem" then
+    Params.Font = Font.fromEnum(Params.Font)
+end
+local Bounds = GetTextBoundsAsync(TextService, Params)
 
             Destroy(Params)
 
@@ -1113,7 +1116,7 @@ function Library:Load(Parameters)
                         local TitleBackground = Draw:Frame({
                             Parent = Outline,
                             Position = NewUDim2(0, 9, 0, -1),
-                            Size = NewUDim2(0, Menu:GetTextBounds(Name, Fonts[2]).X + 7, 0, 2),
+                            Size = NewUDim2(0, Menu:GetTextBounds(Name, typeof(Fonts[2]) == "EnumItem" and Font.fromEnum(Fonts[2]) or Fonts[2]).X + 7, 0, 2),
                             BackgroundColor3 = NewRGB(23, 23, 23),
                             BorderSizePixel = 0,
                             ZIndex = ZIndex,
