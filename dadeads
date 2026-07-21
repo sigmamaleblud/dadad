@@ -577,10 +577,11 @@ function Library:Load(Parameters)
             Params.Size = Font[2]
             Params.Width = ScreenSize.X
 
-if typeof(Params.Font) == "EnumItem" then
+if Params and typeof(Params.Font) == "EnumItem" then
     Params.Font = Font.fromEnum(Params.Font)
 end
-local Bounds = GetTextBoundsAsync(TextService, Params)
+local Bounds = GetTextBoundsAsync(TextService, Params) 
+
 
             Destroy(Params)
 
