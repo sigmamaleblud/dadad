@@ -574,23 +574,29 @@ function Library:Load(Parameters)
         Font = Font.fromEnum(Font)
     end
     
-    local Params = {
-        Text = Text,
-        Font = Font,
-        Size = Size or 12, -- если Size не передан, ставим стандартный 12
-        Width = 10000
-    }
-    
-    return GetTextBoundsAsync(TextService, Params)
+    local success, result = pcall(function()
+        if typeof(Font) == "EnumItem" then
+            Font = Font.fromEnum(Font)
+        elseif typeof(Font) ~= "Font" then
+            Font = Font.fromEnum(Enum.Font.SourceSans)
+        end
+        
+        local Params = {
+            Text = Text,
+            Font = Font,
+            Size = Size or 12,
+            Width = 10000
+        }
+        return GetTextBoundsAsync(TextService, Params)
+    end)
+
+    if success then
+        return result
+    else
+        return Vector2.new(#Text * 8, Size or 12)
+    end
 end
 
-local Bounds = GetTextBoundsAsync(TextService, Params) 
-
-
-            Destroy(Params)
-
-            return Bounds
-		end
 
         function Menu:TruncateText(Text, Font, MaxWidth)
             local FullBounds = Menu:GetTextBounds(Text, Font)
