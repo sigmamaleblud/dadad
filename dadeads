@@ -1,0 +1,4448 @@
+local Library = {}
+
+-- TODO:
+-- Maybe re-do section resizing/repositioning, to match skeet?
+-- Tooltips (?)
+
+function Library:Load(Parameters)
+    -- Variables 1
+    local Game = game
+    local Enum = Enum
+
+
+    -- Functions 1
+    local Base64Decode = crypt and crypt.base64 and crypt.base64.decode
+    local Tick = tick
+
+
+    -- Functions 2
+    local GetPropertyChangedSignal = Game.GetPropertyChangedSignal
+    local GetDescendants = Game.GetDescendants
+    local GetService = Game.GetService
+    local Destroy = Game.Destroy
+    local HttpGet = Game.HttpGet
+
+
+    -- Functions 3
+    local NewNumberSequenceKeypoint = NumberSequenceKeypoint.new
+    local NewColorSequenceKeypoint = ColorSequenceKeypoint.new
+    local NewNumberSequence = NumberSequence.new
+    local NewColorSequence = ColorSequence.new
+    local NewInstance = Instance.new
+    local NewVector2 = Vector2.new
+    local NewRGB = Color3.fromRGB
+    local NewUDim2 = UDim2.new
+    local NewFont = Font.new
+    local NewHSV = Color3.fromHSV
+    local ToHSV = Color3.toHSV
+
+
+    -- Functions 4
+    local Traceback = debug.traceback
+    local Remove = table.remove
+    local Concat = table.concat
+    local Unpack = table.unpack
+    local Find = table.find
+    local Sort = table.sort
+
+    local Cancel = task.cancel
+    local Spawn = task.spawn
+    local Wait = task.wait
+
+    local Clamp = math.clamp
+    local Floor = math.floor
+
+    local Gmatch = string.gmatch
+    local Match = string.match
+    local Lower = string.lower
+    local SFind = string.find
+    local Gsub = string.gsub
+    local Sub = string.sub
+
+
+    -- Misc
+    local White = NewRGB(255, 255, 255)
+    local Black = NewRGB(0, 0, 0)
+
+
+    -- Services
+    local UserInputService = GetService(Game, "UserInputService")
+    local HttpService = GetService(Game, "HttpService")
+    local TextService = GetService(Game, "TextService")
+    local RunService = GetService(Game, "RunService")
+    local GuiService = GetService(Game, "GuiService")
+    local Workspace = GetService(Game, "Workspace")
+    local Players = GetService(Game, "Players")
+
+    local IsMouseButtonPressed = UserInputService.IsMouseButtonPressed
+
+    local JSONEncode = HttpService.JSONEncode
+    local JSONDecode = HttpService.JSONDecode
+
+    local GetTextBoundsAsync = TextService.GetTextBoundsAsync
+
+    local RenderStepped = RunService.RenderStepped
+
+    local GetGuiInset = GuiService.GetGuiInset
+
+    local CurrentCamera = Workspace.CurrentCamera
+    local ScreenSize = CurrentCamera.ViewportSize
+
+    local LocalPlayer = Players.LocalPlayer
+    local PlayerAdded = Players.PlayerAdded
+    local PlayerRemoved = Players.PlayerRemoving
+    local Mouse = LocalPlayer:GetMouse()
+
+
+    -- Parameters
+    local DefaultParameters = {
+        CheatName  = "Skeet",
+        CheatGame  = "Debug",
+        CheatUser  = "???",
+        Parent     = gethui(),
+        ZIndex     = 1000,
+
+        Window = {
+            Position    = NewUDim2(0.5, 0, 0.5, 0),
+            Size        = NewUDim2(0, 660, 0, 560),
+
+            Tabs = {
+                {"Rage"},
+                {"AA"},
+                {"Legit"},
+                {"Visuals"},
+                {"Misc"},
+                {"Skins"},
+                {"Players"},
+                {"Config", Open = true}
+            }
+        },
+
+        Theme = {
+            ["Accent"] = NewRGB(150, 200, 60), -- NewRGB(58, 202, 98)
+            ["Risky"] = NewRGB(182, 182, 101)
+        }
+    }
+
+    local function MergeParameters(Default, Parameters)
+        local Merged = {}
+
+        for Index, Value in next, Default do
+            if typeof(Value) == "table" then
+                Merged[Index] = MergeParameters(Value, (Parameters and Parameters[Index]) or {})
+            else
+                Merged[Index] = (Parameters and Parameters[Index]) or Value
+            end
+        end
+
+        return Merged
+    end
+
+    local Parameters = MergeParameters(DefaultParameters, Parameters)
+    local CheatName = Parameters.CheatName
+    local CheatGame = Parameters.CheatGame
+    local CheatUser = Parameters.CheatUser
+    local ZIndex = Parameters.ZIndex
+
+
+    local Menu = {
+        Theme = Parameters.Theme,
+
+        Shared = {
+            Name = CheatName,
+            Game = CheatGame,
+            User = CheatUser
+        },
+
+        InputBegan = {},
+        InputEnded = {},
+        InputChanged = {},
+
+        CurrentNotifications = {},
+        CurrentContent = nil,
+
+        Colors = {},
+        Flags = {},
+
+        Assets = {},
+        Fonts = {},
+        Draw = {}
+    }
+    Menu.__index = Menu
+
+
+    -- Shortcuts
+    local Theme = Menu.Theme
+    local Colors = Menu.Colors
+    local Flags = Menu.Flags
+
+    local Assets = Menu.Assets
+    local Fonts = Menu.Fonts
+    local Draw = Menu.Draw
+
+
+    -- Classes
+    local Window      = {} Window.__index      = Window
+    local Toggle      = {} Toggle.__index      = Toggle
+    local Slider      = {} Slider.__index      = Slider
+    local Dropdown    = {} Dropdown.__index    = Dropdown
+    local Combobox    = {} Combobox.__index    = Combobox
+    local Button      = {} Button.__index      = Button
+    local Label       = {} Label.__index       = Label
+    local Colorpicker = {} Colorpicker.__index = Colorpicker
+    local Hotkey      = {} Hotkey.__index      = Hotkey
+    local Textbox     = {} Textbox.__index     = Textbox
+    local List        = {} List.__index        = List
+
+
+
+    local InputTypes, InputShorts, KeyCodes = 
+    { "MouseButton1", "MouseButton2", "MouseButton3" },
+    {
+        MouseButton1 = "M1", MouseButton2 = "M2", MouseButton3 = "M3",
+        LeftAlt = "ALT", LeftControl = "CTR", LeftShift = "SHF",
+        RightAlt = "ALT", RightControl = "CTR", RightShift = "SHF",
+        Insert = "INS", CapsLock = "CAP", Delete = "DEL", Backspace = "BCK",
+        Space = "SPC", Plus = "+", Minus = "-"
+    },
+    {
+        "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L",
+        "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
+
+        "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Plus", "Minus",
+
+        "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12",
+
+        "Delete", "End", "Home", "Insert", "Tab",
+
+        "CapsLock", "LeftAlt", "LeftControl", "LeftShift",
+        "RightAlt", "RightControl", "RightShift", "Space"
+    }
+
+
+    -- File Setup
+    do
+		if not isfolder(CheatName) then
+			makefolder(CheatName)
+		end
+
+		if not isfolder(CheatName .. "/" .. CheatGame) then
+			makefolder(CheatName .. "/" .. CheatGame)
+		end
+
+        if not isfolder(CheatName .. "/" .. CheatGame .. "/Assets") then
+			makefolder(CheatName .. "/" .. CheatGame .. "/Assets")
+		end
+
+		if not isfolder(CheatName .. "/" .. CheatGame .. "/Scripts") then
+			makefolder(CheatName .. "/" .. CheatGame .. "/Scripts")
+		end
+
+        if not isfolder(CheatName .. "/" .. CheatGame .. "/Configurations") then
+			makefolder(CheatName .. "/" .. CheatGame .. "/Configurations")
+		end
+	end
+
+
+    -- Assets
+    do
+        local EncodedAssets = {
+            [1] = "iVBORw0KGgoAAAANSUhEUgAAAMgAAADICAYAAACtWK6eAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAYdEVYdFNvZnR3YXJlAFBhaW50Lk5FVCA1LjEuOWxu2j4AAAC2ZVhJZklJKgAIAAAABQAaAQUAAQAAAEoAAAAbAQUAAQAAAFIAAAAoAQMAAQAAAAIAAAAxAQIAEAAAAFoAAABphwQAAQAAAGoAAAAAAAAAYAAAAAEAAABgAAAAAQAAAFBhaW50Lk5FVCA1LjEuOQADAACQBwAEAAAAMDIzMAGgAwABAAAAAQAAAAWgBAABAAAAlAAAAAAAAAACAAEAAgAEAAAAUjk4AAIABwAEAAAAMDEwMAAAAABMz8BIJY/XoAAADwVJREFUeF7t3VtsFNcdBnCTcjOuuXq99vqW9dq7ttdee+31Lr6GTcCx6+ASJesI16IUqTxEufSlVdJGqhs1TaRIjdo+9K2N8lIRRC8RSZOSiEADDUQpCgkFjIHIYAuskuYCmDYQOmfzYbHsrtnLjOfMzPd78f/MjM+ec3bOzDmzs7M5RERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERENAcGBgaGr4PH40E0O6fTed3tdm8TcV5e3nB7e/uDyI7I2Pr6+myNjY1no3u6Rpqams729PTcjZckkltFRUUb9l3dtLS0FKA4RPLA/imNDRs2uFA0In3U19f/BPujtFasWPFsf3//vSgykfYikcg3sP8Ziig3qkAwMjJyB0JSg8fj+QT7m2GhKpanjADsaJLroVDIh8WUCa/XuxJtmTXlzdiJUDfKZP6LzZs3L0b1LAlNMaO9vf0wViVUWlq6UuwHSNINd91112tow6whSykm9WVlZZY9myid4VdohhhYHUcZOXyKTcQFkI1YTGgTVTQ1Na1BtlJd9Wpubv4himUJSpXnfV3zWEqn2YlNYmB1jP7+/nqsti60RVpaW1unV69e/SqSMxwOxzpkG4XF0nA6ndtQNNOrqKjYgWrHwOoYWJUQNrGeSCSSizZIi8vlOossotra2t7HqrjGrKurO4FV14uKij667777fopVMbDJnMHLmlZHR8czqGocbDIDixPq7u4+hM2sB22QNrvd/iSymKF0ktyNGzfakUybmCfMNWUi2oqXNx2bzVaFasbo7OyMYJOcBx54wIvFSVnyknmmZ44bkI2qSkpKkh7xtISXN63GxsZHUNUoLBY3lfqwKClsaj2of8aQjeqQ/ZzDy5ua2+0ODg8PNyI5a1sr217funXrAmxqLT6f7020Q8aQleqQvS6UuVEbimF6gUAAtU4Mm1lPYWHhzCeqyfj9fnElyuN0Oj0FBQWe/Px8TzgcfnrdunXXe3t7NW08ZW6Th2LoQplHHUVRTM3j8XwbVY6hvOd/xSbWhHaYFTbVTXl5+REUhWZRWVl5oKen57totrQhmxlK5/gLVlmTMrS6iLaYlQwfDFVXV6M0lIr29vZCNF1a8O9RWGRNSudIeejS3NwsTWOhSJQi5cBiuDsF5uGvrkTjIUzJPAVCXSnFnud2u7ePjo4+gEWUIlnew9vRvZDiu9xvvPHGW0imTLYGdjgcoxMTE9VIUgpcLtd/8/Pzuz/44IODWJTQokWLqvLy8oYWL16cs2TJEvEho5gL5mzbtu1pbGJe4uyRCfy7VJTO3o7iUZo6OjqSvqfYJCN1dXXGnr+gHmkbGBioQhZS6e7u3osiUppqa2tPoBljYHXGbv4AMl2G/JqjGF698sorY0hKZXx83Jqf8Gapr69v6OjRo5oMUS9duuRGmDZdO0hlZWXKp7+CgoJnlQnxFtnmHjcTR6vTp0+vRpJSJN7T119//Q9IxiktLX0BYUY+++wzROnTrYMMDQ2tOHnyJFLJNTc3T4gGvHDhwo9PnDjxeyyWjugcCCkFNTU1/xbvq4BFSVVUVPxZmUtcQXJO6XY0ttlsT0xNTT2LZFKpNKDe2DnSY4T39AbdziCpdA5B7HwdHR2Hli1bFqivrw9gsRQeffTRRewcqQsEAnlG6hy6EjtWNqqrq3chK12hOJSEMjwSN5HOfAkqXcpBcdeqVat+gaR1oP2yFolEFiJL3RQVFf0DxZGS3W7f5XA4dom/WKS5hoaGrA9gd9555+PI7royUd+KxdaAemettbW1CFnqqrCw8B0USRoommGhGjOUDv4cVpmbz+f7HHXOmnKUkaKDCH6/fzeKpTujP2sL1YijDLnmtF66TNKvXNHlip3mCgoKnkKou/HxcUTGVF5eXoIwxocffpjjdDpHkTQnHAxU0dfXp+uRsrOzc4vNZtuC4kgHxZSecsabaUMsyhkeHk745BOhpaXF0GfIWaGOqlm/fv1UTU3NFLLXHF7WEFBkqaGoM9xu98yzrtauXbsMi+MoneoyNjMX1E91dXV1ml8O7O7uTvgsWVm1trZ6UXQpDQ4ObkBRYyhzyzuxiXjiSQ0Wx1GGW+IA2YlNzQF10wReQjO9vb2G6iDiETkourRQ1BhtbW3/w+oZWJUQNlGdIe/m1dOCBca6Wff48eOI5GW32+OuRO7fvz+uoZVOU4cwjladhB0kTV9++SUiUsvU1NR55Ux3FckZjY2NMTv9u+++ezTZrSoNDQ3TCFWly30xWp4S1brXR5n077548eKavLy891wu1/7XXnvtB2K5lmXXSmVl5djp06el/zpworZN9n7euq1a77sUROW0smbNmrhGVnaQ6JWQ0tLS72PRrKIZmQyqJjWHw3EexY0qLy+fxKqEsFnCh5UbGuqlGbxMVCgUintaI1Yl1NLS8ndsZiqontS2bNmSj+KKJ2j2YfGslKFZxg+nkxbaQDP33HNP9IgSDAZfwqI4Xq+3PFqYm3R2dlZitenc/LMCJDm8Z5oS18dvp7i4uBZFyunv7zf1E0mUMyM7SAZ0uYpVVlb2BULNnDp1ClFyk5OT//J4PPu6urqO7dy5cx8Wm9L0tCYXeUxPlw6Sl5eHSH/Hjh1r37t3rwfJrBUVFT2Wm5sbrq2tDQ8NDdWLqyuRSCTc0NAQttlsYWw25xYu1P1rM5QqZWdR7XZ3GVRXV3/20EMPpf1zafj3OcE5SGZ0OYMoOxQi4wuHw/4TJ04s27Zt23tYlDJxdlm1alU7kpqqqqqS4ivKRqPbhyviqIbQsMQOjjArLpdr89jYmKaPNFKrrFbDW00ypOYOd/LkyRcLCgqCSGalv7//eVE2QZkDRe9xCgaDcZe0SXLRgbFBDQ4OPo9qqKavr28pss9IYWHh/cgqhnJ2MvyZ2pLEd4uNClVQHbJP28MPP/xNZBFD/LKT0b+brjfOQdLk8XhyRkdHNWm3TNpEDKUQxunq6vrZV1991bpv375vYREZRVVV1RNihzAiVEF1yD5l69evn7UsYhuElCHdJuljY2PWeMaRhq5du1aMkMwoehg0KFRBNcFgEDmnxu12x30l9WbiiZNiOyQpQ7pe5vX5fIiMp7a29k2EWfP7/Q8eOHAAqdQcP3581u/+jo+PRy/3IklGFT0cGlQoFLr9HZG34fV6kz77aTbiodDIIiEjPKyBUoD329A8Hs9LqE7KNmzYkPS7KqlSOlfSx67ergORQeC9NoWenp73y8vL6zZt2pTwk+uqqqq6hQsX1mFzVWzevDlhJ+EZRB26j1HFm4yQMjQ4OLhk+/btMV/4EO3KOUj2dL8Xa+XKldb7cRSVvfzyy5fFD6IWFha2YRGpRPcOUlzMS/lqED+Iev78+f3izCFgMWVJilMw31BtKBP1c+Pj4zwCZYEdxOQ4D8mOFN8H6e7uRkQkFyk6yOjoaMLbtYn0JkUHsdvtiEht4XBYtSe2WJEUHeTw4cOXEJLKrl279k+ElAEpOojgdDoRkZomJiaWIKQMSNNBGhsbf42QVDQ2NoaIMiHVJUBe7tUGL/VmTpozCJGM2EGIZiFVBwmFQmcRkkpu+jVlyoBUHeTjjz8OICSVLF68GBFlQqoOUlhYiIjUUlRUtAUhZUCqDlJWVvYpQlLJnj17NH0ottlJd/mPl3rVxUu82eFVLKJZSNdBCgoKfoeQssSzR/ak6yD5+fmIKBsVFRWIKBvSdZD58+cjomxcvXr1XoSUBek6yJUrVxBRNiYnJ/+GkLIgXQc5c+YMr9tnye/3v4CQssTLvBLo7e3NWbp0af727dsvYtFtjYyMzD98+PCZHTt2xD1ZkZNzExMdxApWrFjxc1Q5a8gySsn3SSwmswmFQna8z6aG6qqmpqbmc2TND1lVJtUcZGpqCpE5BYPBtVoMf4qKvh5ltba2Rv+SSTmdTg8OhKZTX1+v6aNbxGsgJBVJNZkz85us9cRZtJ3Wr2FF0l3mNaumpibNxj9DQ0MVPp+Pd0JrgB1kjhw6dOhgY2Pj95BU1bFjxz68dOnSb5EkM9q0aVOJGCaYXUlJieq/4SHyRUgqk+YMcvDgwR8hNLWzZ8/uLy8vV+1hVV6v9xGEZGbRw6vFLF++/C5UPyPibCTyqaur24tFZFbRPcai0ARp6erq6se/X7fZbHw6vkakGGL5fL48hJaE/TzK7/cPRCKRAayaIZZ1d3cPlJaWPie227t3706syunv77+KkFQmxXVzu92ed+7cuZRv1KNY/PxDO1KcQUKh0BBCSlMgEPgNQtKAFEceMWRASGni2UNb/KCQaBbsIAa2fPnySoSkEXYQA/P7/dMISSOcgxgY5x/ak+IMwmc4pY+dY25I0UGUsTQ/CSYpSdFBxM9A+3y+N5Gk2xgeHl6GkKyktLT0lJiPUHJOp5O/BmxlynzkLewLdAuv18uLGXNMyome2BkQ0k04MZ97Un4OInaE4uLiPUiSYuPGjc0Iib7W1dX1bnRsYWHKkPM/aA7SgfSnbIfD8c7ExEQHkpbDYZW+pL/VZHJysjMQCNQiaRk+n++X7ByUsqqqqlKMOkzPZrM9hmoTpS4UCr2BfcjUUF2SgOFO4V6vd+VHH310AUlT4tBKHtLPQW515MiRTzo7O/kLSkSz2bp16wKMSEwHVSTKHvYpU2lra4ugeqQzww2xbiXG6xUVFab6adyLFy++jJB0ZprJYDAYnD5w4MBiJA2PE3U5GP4McsPBgwdzvV7v40gSUSJDQ0ObMZQ3NFSHdGba03hZWdnx8fFxN5KGwyGWHEz9JuTm5t5/+fLlPyJpKOwgcjDNHCSR6enpP/X29q5CkoiSWbp06XcwvJdeIBAYQbGJ5o5yNnkK+6C0HA7HiygukT76+vpexf4oFaUD88whGUtPBMVOiVB3nJTLydST9NsRO+Xg4OCSsrKyI1g054LBoIudgwzB5/M9Ex3rzAG8JJHxlJSUrFq9ejV2ZXWJvPEyROZw9913P+9yubCLp0f8nzKMG0RWZDAc+6ZpZGTkjrfffjtm7rZ79+4vxd9wOLwgukChbMOfZiYiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIjKPnJz/A4Y56YpxdP3yAAAAAElFTkSuQmCC",
+            [2] = "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",
+            [3] = "iVBORw0KGgoAAAANSUhEUgAAAJgAAACZCAMAAADkQAO2AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAGUExURf///wAAAFXC034AAAACdFJOU/8A5bcwSgAAAAlwSFlzAAAOwwAADsMBx2+oZAAAABh0RVh0U29mdHdhcmUAUGFpbnQuTkVUIDUuMS45bG7aPgAAALZlWElmSUkqAAgAAAAFABoBBQABAAAASgAAABsBBQABAAAAUgAAACgBAwABAAAAAgAAADEBAgAQAAAAWgAAAGmHBAABAAAAagAAAAAAAABgAAAAAQAAAGAAAAABAAAAUGFpbnQuTkVUIDUuMS45AAMAAJAHAAQAAAAwMjMwAaADAAEAAAABAAAABaAEAAEAAACUAAAAAAAAAAIAAQACAAQAAABSOTgAAgAHAAQAAAAwMTAwAAAAAEzPwEglj9egAAAD6ElEQVR4Xu2QWXbjMAwEk/tfemir7GhpgAAXTZzH+pEF9ZZ8fY9jZNbAsK8H/B7AsKjnroHL1rAsa1iWNSzLGpZlDcvyl4cx6QCfOuiLYIYBojba3bRXQJyn0UltCCxJmmw0hsGWIm+iLAnmOFkHPQ0QECWnp+PI4dP24gmDpNQU7OBD4XJw1XUSYtLfcAZ5rHg84lKiX3B9Y5xrNpOoklzguMf+UvcqgjpCN7gd8b4F7BdCMhI3uJ3xvx4iOPlEVORtcLtQ+RwL2RHQEPaEk6AqCOa8qEuIesBFEpBEo55UFQQ94KKJaDLLagJiHnCxiGgycTwNCClwcAiJwon+ZyIKHAZAYIGDxv1KQIHDEIgscJB4H7EXOAyC0AIHhfMNc4HDMIjtHsb7QAj2ou1PWGfsioSbXzDO2RWIrw7jdTjEp4dhmz/MHMDzBKZ5u6oVlWG8ToGK1DAsU3dVWuQVw+8dxus0qNEbeO5Bft8wOYLnHtTTd7lN4ob4hl1e1wcO420yZtn1hPTeYWIGzx8s5SSsussF4d3Drjt4vkH3a4fxdgNG4fmA7NcO4+0OaLwM4flCq6aiK0cOa/xzdOXpHVFLRavP6NTDeMvQ7tTWNcxBWj9kmJTE6LeepvDcUIogHVbpXcM8lHcN81DevmHoH4afX3mUl5sNOgkSA0QGiNohR4LEApUGTQcEKVBYoJIg6YEkBQoLVBIkHRAkQWKBSoOmHXIkSCxQadDYoNtQNw/0BojqKH3fsB1vKz8yKcowflgDyruGeSjvGuaA1RvWEd/u1NY1zEFaP2xYQ36z0eg8J0lRiFafUTluWDO68v8PozE47MZlRuH1oHXzMAqtYbcto+6Dh1n/2llYdeawm5ZRFhl277/MLLOH3bKMqg8fduMyiuQInntQz19GjezRR+B1GtTkh01eRoluMa7A6yQoyQy7ZRkV1gKeJ/DMXEZBctj8ZcSbBWYxtunDeL1QHTZpGeENw+YuI9oJd2qxzlhGsBfttWIev4xYNzg0bPAyQgscFG4n9gKHIRBZ4CDxKwkocBgAgQUOmkojEQUODiFROLGWRcgDLhYRTSaOpwkxD7hoIprErvqwaFhAktkVGLaPc9RVQTDnRUBySDT1lc+xkB0RzTGV0xn/ayThSEwV+Hu9bwH7haDsGK1M9pe6VxHVneMvPuNcs5nEleeKU4m6VSwuCano2bkvB1ddJyVWZYX9l+dvRxYmKdeVEfCHSRsap2GOk3cUKAuDLUWTKTcNS5JGW4FaH7QNdFgL1BsgaqPP/YQZB/jUwYCIjWGLYA3LsoZlWcOyrGFZ1rAsf3/Ytozf3Xx//wPyjExqpaJa7wAAAABJRU5ErkJggg==",
+            [4] = "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",
+            [5] = "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",
+            [6] = "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",
+            [7] = "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",
+            [8] = "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",
+            
+            ["Tile Background"]   = "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAICAYAAADeM14FAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAYdEVYdFNvZnR3YXJlAFBhaW50Lk5FVCA1LjEuOWxu2j4AAAC2ZVhJZklJKgAIAAAABQAaAQUAAQAAAEoAAAAbAQUAAQAAAFIAAAAoAQMAAQAAAAIAAAAxAQIAEAAAAFoAAABphwQAAQAAAGoAAAAAAAAAYAAAAAEAAABgAAAAAQAAAFBhaW50Lk5FVCA1LjEuOQADAACQBwAEAAAAMDIzMAGgAwABAAAAAQAAAAWgBAABAAAAlAAAAAAAAAACAAEAAgAEAAAAUjk4AAIABwAEAAAAMDEwMAAAAABMz8BIJY/XoAAAAB5JREFUGFdjgIH/QACimWAMOEAXYILSGBLkm8HAAAC6YB/pqiePyAAAAABJRU5ErkJggg==",
+            ["Tile Background 2"] = "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAICAYAAADeM14FAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsIAAA7CARUoSoAAAAAYdEVYdFNvZnR3YXJlAFBhaW50Lk5FVCA1LjEuOWxu2j4AAAC2ZVhJZklJKgAIAAAABQAaAQUAAQAAAEoAAAAbAQUAAQAAAFIAAAAoAQMAAQAAAAIAAAAxAQIAEAAAAFoAAABphwQAAQAAAGoAAAAAAAAA8nYBAOgDAADydgEA6AMAAFBhaW50Lk5FVCA1LjEuOQADAACQBwAEAAAAMDIzMAGgAwABAAAAAQAAAAWgBAABAAAAlAAAAAAAAAACAAEAAgAEAAAAUjk4AAIABwAEAAAAMDEwMAAAAAArIfcnPEIHlAAAAB5JREFUGFdj+A8EDEiACUpjSMAFmHDKwADJZjAwAAC6YB/pAH8I/wAAAABJRU5ErkJggg==",
+            ["Sizer"]             = "iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAYdEVYdFNvZnR3YXJlAFBhaW50Lk5FVCA1LjEuOWxu2j4AAAC2ZVhJZklJKgAIAAAABQAaAQUAAQAAAEoAAAAbAQUAAQAAAFIAAAAoAQMAAQAAAAIAAAAxAQIAEAAAAFoAAABphwQAAQAAAGoAAAAAAAAAYAAAAAEAAABgAAAAAQAAAFBhaW50Lk5FVCA1LjEuOQADAACQBwAEAAAAMDIzMAGgAwABAAAAAQAAAAWgBAABAAAAlAAAAAAAAAACAAEAAgAEAAAAUjk4AAIABwAEAAAAMDEwMAAAAABMz8BIJY/XoAAAACpJREFUGFdjQAfm5ub/GaFsMAAJsLKyMsAFYQIgABZEFgABRnQBBgYGBgCzlgh1N0GJbQAAAABJRU5ErkJggg==",
+
+            ["USP-S"]   = "iVBORw0KGgoAAAANSUhEUgAAAEMAAAAZCAYAAABq35PiAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAYdEVYdFNvZnR3YXJlAFBhaW50Lk5FVCA1LjEuOWxu2j4AAAC2ZVhJZklJKgAIAAAABQAaAQUAAQAAAEoAAAAbAQUAAQAAAFIAAAAoAQMAAQAAAAIAAAAxAQIAEAAAAFoAAABphwQAAQAAAGoAAAAAAAAAYAAAAAEAAABgAAAAAQAAAFBhaW50Lk5FVCA1LjEuOQADAACQBwAEAAAAMDIzMAGgAwABAAAAAQAAAAWgBAABAAAAlAAAAAAAAAACAAEAAgAEAAAAUjk4AAIABwAEAAAAMDEwMAAAAABMz8BIJY/XoAAAAr9JREFUWEfdmE+ITVEcx981489g/JkohY0NykYJpZkpkz8LzYKSPyU7YTkbWQwLZUFsrIxmoahRdjajpFAUEzZC2chiKDH+vJkR83y+55yr9+579w8177rnW59+v3Pee/ed873n371BqUqVSmUGYR6Mw1QQBFOqny7xf9sI+2GU/zrp6jYQdsGEykhtmAMqq31J+gX6zlxTyi5de6iRGQ9AcRI+wzNI03fQBcPrqQNqUFqjdsAmm5a6MeQebThLfsJWNVWnomZsJdyGFlPRXN0HjchumK2KJutSdNgdgjyMkDphO+RhhNQSNWOzi3noJYzaNBdNGjOYHl3QS7pM5Zw0AHvgiinVq5KBf13wtd49DDDhGMkZWAy6YM060kRdZgE9ooQ27SaoY2qPbthCeANJbdNnP0HTbBFoZ8miVvgIj2TGXpL1sAU0b/PSBczoc3ku+uM0plwnaM//G2n71Z34BtEhqmu3wxh8cuU46Rr9mKGpkpuqzdhHOA2rTUW6LoI6uwoOQnhICrUAnsBOeAVJZmgqlDFDw/z/EIa0QS+MQ5IGYSkMgwypE/U9cNMVC6GarZU7o0PPMJRNRbxugE6Oj/nNV1NTL+0Md21aDEXPGdJh6LBprI7CW3hnShExIuYTlsNVU1EQ1cxjOtFGeA0rTEVjadRobuvY/gJ0YtWzibY+bVMyWGeWp4waPWcURlEzDhCu2VKszoPOJbr76nwPrAWZFF5P8RxmfLHFAgozhiBNx93X/RWd7IAx0914lWGl+4l3ql5ANc91NkiSFsz3NvVP1Wbo8JQmbaU/XO6djBkMfcV1ylM04qK/wox2+ABJmoA17ideKpwmWd5X6qGs4SHLF4VmLIGZNo3VHdBx3VuFZuj4PcumsXrO4pn1hUkhZU6MrAUbCXokV2dVF76UVS7DdNK8BXrn4KkhpdJvM1RU2xMxIjQAAAAASUVORK5CYII=",
+            ["CZ-75"]   = "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",
+            ["MP-9"]    = "iVBORw0KGgoAAAANSUhEUgAAAEgAAAAdCAYAAAAJrioDAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAYdEVYdFNvZnR3YXJlAFBhaW50Lk5FVCA1LjEuOWxu2j4AAAC2ZVhJZklJKgAIAAAABQAaAQUAAQAAAEoAAAAbAQUAAQAAAFIAAAAoAQMAAQAAAAIAAAAxAQIAEAAAAFoAAABphwQAAQAAAGoAAAAAAAAAYAAAAAEAAABgAAAAAQAAAFBhaW50Lk5FVCA1LjEuOQADAACQBwAEAAAAMDIzMAGgAwABAAAAAQAAAAWgBAABAAAAlAAAAAAAAAACAAEAAgAEAAAAUjk4AAIABwAEAAAAMDEwMAAAAABMz8BIJY/XoAAAA9dJREFUaEPtmUtIVFEchx3tYfa2SIqUiOwJhYZCizZRCREFUdEioSyIiAgKWrRo0SZq0UJ3RbXpRZD0ghKJIimIDCzpoUaWkbXI3plaat/v3HNLZ+7MODnjXKEPPv73nJl75sx/zj3n3jMp3d3dmTgmJQnwueNwLw63Vb4jQOdGEzsDgUCrUxV/lAjCCsxQUXXQhYtxM17By7YugAPFELzLd691iqEMSGdI0CbCSafkO55gIUn67hR7k2pjohlmox+Zi3Ocw1AGKkG/bPQraxnlwzAdNScrmh9Vc9BQYhrq+neNGwzdLj5jK4fHnBpf8gOfohaLifgef2KlEjSfg4M4BTuwDeMxN2kydhM+FWfiYKNBCcrn4AJOM1X/6Um1EpTHwVmchWV4DrX89QfNORqZq3A56hIejDx2E6Sk6BIoZs44pVfiAW1nEeoxKTei/0AD6vtrgGiSrteXyMM6FOupjBu0l42fTcuDg1c4wnbf4C7zbmy2MZ6MtDGR1KB++Wv4SRUx8AwrUN89B7fhH9xL7DzOwNlcYnV6IR7Qtm4h9qCWznbVgVZIrZZaWnWsVU4rp9Cx+lNiStFpxFFYQr+vqoLP1FRxGFerHAX1SXfRjzhP77+ImhIKqPtCNA3qEnuObZhtKpMIfUjD2xiND5iLZ7DYnm6gvBPFLdyBlaYUSitOt+foc6tUCUWmIUFBCXqB+sDxtjqp0I/9GI0WLMQC3GdP1bkbsQMrMNPWZWEzBqME5ZoTgeN8LEOtwA4UlKBGrEdfbDvQj1LsKyewHA+hkiJOY6+5j/J180pvlMgF9i3e8AYl6DVW2aqkQj8moH6wSLTjbrxhSg6dWINbbFO9oP6S3uRBxLlKq5cmSo2cJlX4gHUY7a7+IZPoEeIy1OVQiJo/F1J/nOjFRxuD0SNWWNwE6eSbqkgm/JrphO1OKSLaYDMPwliL97EZO82r3oR7CI96iWVgDiZ9/qEPRRgN7Q4ssqf0Gc45as4ORZO3mcy9SCXrrdiE7n1KMllqYyTeou5VYuWdjcFMxr+rVhADtWEWFX5FPdAWOKWIvMRw80kktMcTjpU2huCbBIHuuic5hxH5xmgPN59E4o2NXuheynPHwU8J0mLh/uORCLRKh2tfI1ePWiH4LUEaRYlCz5jaVvVCT/Cai0LwU4JEwkYQl6UePu84JU98f4lpXunLzmN/bkfKbQxGo8tzq0fD2jcwUeomUf9RLcF5qvOglNGwyx7HBO1rl/AAjsVq/Iot+IA2PfeRfJUgF77IBsIa1L5RT9RfJeieU4wd2jb77bTRh//qUlJ+A5/NrV5ZYKIYAAAAAElFTkSuQmCC",
+            ["MAG-7"]   = "iVBORw0KGgoAAAANSUhEUgAAAE4AAAAdCAYAAAAEsFpEAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAYdEVYdFNvZnR3YXJlAFBhaW50Lk5FVCA1LjEuOWxu2j4AAAC2ZVhJZklJKgAIAAAABQAaAQUAAQAAAEoAAAAbAQUAAQAAAFIAAAAoAQMAAQAAAAIAAAAxAQIAEAAAAFoAAABphwQAAQAAAGoAAAAAAAAAYAAAAAEAAABgAAAAAQAAAFBhaW50Lk5FVCA1LjEuOQADAACQBwAEAAAAMDIzMAGgAwABAAAAAQAAAAWgBAABAAAAlAAAAAAAAAACAAEAAgAEAAAAUjk4AAIABwAEAAAAMDEwMAAAAABMz8BIJY/XoAAAAvdJREFUaEPtmU1sTEEAx3fban21CBJugmhIcBDfScORi5BUwtFNpBEhkhJCgpCKOHDgUo2DhjRukp5EDyRujkTigLYapKGrSu36/Wfm6e5m7Xuvbdjd2V/yy8z73Pf+mTdv5m0yAZlMZh7FPlWdU2EhjuII1mhFCVKHn/FRMpkcM2tiEgTXQXFCdc84Q3AXXD0WNYSm9LfbRe+Y78rYJAluMeVLXGDW+MVHHMAWWt4wWUTqWtg3reAuUW+3q7wkjc9wHMOC09P5BbsU3BMqLVpbJTJ3lPAqW69SgB+oEcJ3p5bVMofU4o5RuYY+o6HJTzSjDKjFFO7HIZyBQtsV3AcFp51O4ylsQF8Yxnv4CW+gxp3KIpsRvQhcPYcgYY3ldlN04SKzovLpJpQDrh6bP8EJwltCcRV1wlId9U8HevzWE9ygXYxPTnABBLiOohU1DVuNBfebRjTNm+pvqBNX5519HtUbbTWHQ4TW6eqToujFEqA6xQ24C/UIb8GVOBs1pomL3ky6waMY3KTGRepjt6H6E/U96oDzr03bmnCWWZqgH89iL+pcwZOi/WfiYdyIGui/x7uE9pDy30GQ9diIm7ANz+E3jEI/rsDXuNSdUudci19RXMQ61G80Zev27cBsBnCzOVER2CeYWpYGXMxOjMogXsZxfI63sRtTKHow/62WA9vPmz0nOOI2lQ9cdAO+MJcfzhimbbUg91GPVVHYpxl7UefSMf+tFRXt44rBRevF0WOXQrmCr3A5/tIKh278LXbS70T6Lsbv1lPMwRTHqJ8sL7iB/Mfmb4ziGneY3xCEOvCnSiUCt9xhVQhjj80kEjvcYX5DELXYZyIJR1O4KoIwWm0moeiLarM7zG8IIk7fdtMdVpHEncgfxK22Gso7V/oNLUjTlsemLYWjQeoyd6jfEMReE0k4mpNO+m+3ciHOo9rmyjD6GNHrC0cVWtBJ05bCeYP6hFPxRJqrEoY+ah5H/aGh71zBHDH7e/xcfEBru24XK5lE4jdHSXOKFEtMggAAAABJRU5ErkJggg==",
+            ["M4A1-S"]  = "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",
+            ["SSG-008"] = "iVBORw0KGgoAAAANSUhEUgAAAG4AAAAcCAYAAACAsYoxAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAYdEVYdFNvZnR3YXJlAFBhaW50Lk5FVCA1LjEuOWxu2j4AAAC2ZVhJZklJKgAIAAAABQAaAQUAAQAAAEoAAAAbAQUAAQAAAFIAAAAoAQMAAQAAAAIAAAAxAQIAEAAAAFoAAABphwQAAQAAAGoAAAAAAAAAYAAAAAEAAABgAAAAAQAAAFBhaW50Lk5FVCA1LjEuOQADAACQBwAEAAAAMDIzMAGgAwABAAAAAQAAAAWgBAABAAAAlAAAAAAAAAACAAEAAgAEAAAAUjk4AAIABwAEAAAAMDEwMAAAAABMz8BIJY/XoAAABGJJREFUaEPtmmuoTVkAx8/xGGHikusxRmQKg255hkiKQR6JL/ggl6KJ0BX5II+8viGPhk+GRpLHBySU7kwUiSgxyhfkA2Jc1+N6H7//XmubfY9zzj7bvXdd+zq/+rXW2o+1H2uv1947mYgBqVTqJ4Jl2AqvJpPJHVpeoJ6gQJphd+yBre3iL2DdRPQ5Yxd/19RrjaMQphL8hTqPg9Sk2VqeDttNIjhmUomTbDfBxkNh3/EEQ0yqGpfJ57iNFwiDG9kUi6yl6HMM/eXpzkCf05hpm3Qn41HMxkZ7SrHEaY3jZqk5PIKDvAWJRFNsbqKJ9/jKRL8guN0HfGmiOVF/mIsyatwWGy+QCwquEz7V4/4NsNSeVixpZENXqLb8YKL1TsqGscR1U9mSYDm2wbaopvMJvsA32BPzHnjUkCW4G2MxJbLoXFM08VWhJ83N/oWgE6oPCkP5qVZdI/O33pIQyH8+QV/Uvr1xFLrgIf6Hjb1UPPDv796cBcdN7UhwDdsrqWV5oO3GUnBnTTIz5D2AYBOO8RYUiMKOsILrQPAvqmmLwngK7pSNV4M8+xAswlLUaLEhoJrr8m3O2SQ3ciQRNU/BQtSgRel3OB17Yb58xBIK7gZ5NyGupkgDktGoCfY4m25I3OJ6f7VxJ6jg1FytMMla4TUeRTWZ6h9bYDGqn3SBHjY9LLUxaszU/ynf9JbqNgXXw8adoIJbSbjOJGPPejyMmqzXtOC0v0bBwYdABaZB1zRUc+/jvODU56zEuuQ+XsFn+FoLMvAetf4mXseXGJV99pLqHI41Aqu8oxpu2VXOqOsJuIbcw3AodsXFmI6aaY1cy3lqNR0Yjg8wCrdRn32cwHmeI9hjUh7OpxRRCk7NRRWqDwt7V1iJ2kZv/O/hW6wgrSmC1gXph8+wL09uGaH6x+6YL5pfziV/PSQuCd6Df2zoDm5Wvk3ln9gR2+NwrMAgH/AC/oZ6O98Zf7SH8SC9ED9iEKXVTL7xUgY1lS9CfI6VuMFm7wyOqXeup9BHUxu3cNB8C+4EqlboU4z6Ih/d5L04DDX8zwjrivEhBnmEvVE3QgX9sw3D1HYdUKNV53Dc9RhkgV3lDg4aZXASrC2ap5VhN5tVVtimEapw09EoMHZw3iX4h3cFhjl2lTOiDk40HD6JM3EA/cpmvKMVIWjSPctEP/MYd5lo7HiO/vdBMdCG7uBpCatx6nsO4XYcbHeLBPvNwXQO2NWxg3Pfai7hM3ftKndw0NXm2FnRQCDrjzz5wP7lXk7VOY/Oh9G1Aec9CtfiKtyPerg15XEHB1yOPpoIvzPRaoT2Y7lg/w34xMvpfzSS7GI3iS1cg0bQGuHqlwxn6JVXEaH+gtKrHLXd+t6jzzn6TqYaoXnSGvoyTZK/Go7TjmAK9kf1b3/jOfLVu8VYw7VtI/gdu3A9UV8eFKgvKLh5KHZi1ilRgW8ICkpTnUsqNUuJXVWnuP5ZqCGiKZL+m9GrvIuYz/SohiQSnwAsDpaV/+it6wAAAABJRU5ErkJggg==",
+
+            ["Scroll Bar"]          = "iVBORw0KGgoAAAANSUhEUgAAAAQAAAA6CAIAAAAY42/0AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADr8AAA6/ATgFUyQAAAAYdEVYdFNvZnR3YXJlAFBhaW50Lk5FVCA1LjEuOWxu2j4AAAC2ZVhJZklJKgAIAAAABQAaAQUAAQAAAEoAAAAbAQUAAQAAAFIAAAAoAQMAAQAAAAIAAAAxAQIAEAAAAFoAAABphwQAAQAAAGoAAAAAAAAApnYBAOgDAACmdgEA6AMAAFBhaW50Lk5FVCA1LjEuOQADAACQBwAEAAAAMDIzMAGgAwABAAAAAQAAAAWgBAABAAAAlAAAAAAAAAACAAEAAgAEAAAAUjk4AAIABwAEAAAAMDEwMAAAAAAFBpTKuVF6awAAABxJREFUKFNj/P//PwMMMEFpMBjljHJAYHhxGBgAdX0DceClgzAAAAAASUVORK5CYII=",
+            ["Arrow Up"]            = "iVBORw0KGgoAAAANSUhEUgAAAAUAAAAECAYAAABGM/VAAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAYdEVYdFNvZnR3YXJlAFBhaW50Lk5FVCA1LjEuOWxu2j4AAAC2ZVhJZklJKgAIAAAABQAaAQUAAQAAAEoAAAAbAQUAAQAAAFIAAAAoAQMAAQAAAAIAAAAxAQIAEAAAAFoAAABphwQAAQAAAGoAAAAAAAAAYAAAAAEAAABgAAAAAQAAAFBhaW50Lk5FVCA1LjEuOQADAACQBwAEAAAAMDIzMAGgAwABAAAAAQAAAAWgBAABAAAAlAAAAAAAAAACAAEAAgAEAAAAUjk4AAIABwAEAAAAMDEwMAAAAABMz8BIJY/XoAAAAB9JREFUGFdjgIH/QABlMjCCCBQBEEAWgAGQSjRBBgYAtesM+0qFagQAAAAASUVORK5CYII=",
+            ["Arrow Down"]          = "iVBORw0KGgoAAAANSUhEUgAAAAUAAAAECAYAAABGM/VAAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAYdEVYdFNvZnR3YXJlAFBhaW50Lk5FVCA1LjEuOWxu2j4AAAC2ZVhJZklJKgAIAAAABQAaAQUAAQAAAEoAAAAbAQUAAQAAAFIAAAAoAQMAAQAAAAIAAAAxAQIAEAAAAFoAAABphwQAAQAAAGoAAAAAAAAAYAAAAAEAAABgAAAAAQAAAFBhaW50Lk5FVCA1LjEuOQADAACQBwAEAAAAMDIzMAGgAwABAAAAAQAAAAWgBAABAAAAlAAAAAAAAAACAAEAAgAEAAAAUjk4AAIABwAEAAAAMDEwMAAAAABMz8BIJY/XoAAAACRJREFUGFdjZGBg+A/EKIDxPxBA2XAAUsmALMEIBFAmsgQDAwD5hAz7jCiKYwAAAABJRU5ErkJggg==",
+            ["Checkbox Gradient"]   = "iVBORw0KGgoAAAANSUhEUgAAAAYAAAAGCAYAAADgzO9IAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAYdEVYdFNvZnR3YXJlAFBhaW50Lk5FVCA1LjEuOWxu2j4AAAC2ZVhJZklJKgAIAAAABQAaAQUAAQAAAEoAAAAbAQUAAQAAAFIAAAAoAQMAAQAAAAIAAAAxAQIAEAAAAFoAAABphwQAAQAAAGoAAAAAAAAAYAAAAAEAAABgAAAAAQAAAFBhaW50Lk5FVCA1LjEuOQADAACQBwAEAAAAMDIzMAGgAwABAAAAAQAAAAWgBAABAAAAlAAAAAAAAAACAAEAAgAEAAAAUjk4AAIABwAEAAAAMDEwMAAAAABMz8BIJY/XoAAAACxJREFUGFdjwAUYgVgQwkQFIAlFCBMVgCT0IExUAJJwgjBRAUgiGMJEBgwMADXjAPv4EHK8AAAAAElFTkSuQmCC",
+            ["Skeet Gradient"]      = "iVBORw0KGgoAAAANSUhEUgAAAAYAAAAGCAYAAADgzO9IAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAYdEVYdFNvZnR3YXJlAFBhaW50Lk5FVCA1LjEuOWxu2j4AAAC2ZVhJZklJKgAIAAAABQAaAQUAAQAAAEoAAAAbAQUAAQAAAFIAAAAoAQMAAQAAAAIAAAAxAQIAEAAAAFoAAABphwQAAQAAAGoAAAAAAAAAYAAAAAEAAABgAAAAAQAAAFBhaW50Lk5FVCA1LjEuOQADAACQBwAEAAAAMDIzMAGgAwABAAAAAQAAAAWgBAABAAAAlAAAAAAAAAACAAEAAgAEAAAAUjk4AAIABwAEAAAAMDEwMAAAAABMz8BIJY/XoAAAADFJREFUGFdjZGBgYAdiDACSEIUwUQFIQgXCRAUgCQsIExWAJNwgTFQAkgiBMJEBAwMAQQ4BGVjJfdMAAAAASUVORK5CYII=",
+            ["Skeet Gradient Down"] = "iVBORw0KGgoAAAANSUhEUgAAAAYAAAAGCAYAAADgzO9IAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsIAAA7CARUoSoAAAAAYdEVYdFNvZnR3YXJlAFBhaW50Lk5FVCA1LjEuOWxu2j4AAAC2ZVhJZklJKgAIAAAABQAaAQUAAQAAAEoAAAAbAQUAAQAAAFIAAAAoAQMAAQAAAAIAAAAxAQIAEAAAAFoAAABphwQAAQAAAGoAAAAAAAAA8nYBAOgDAADydgEA6AMAAFBhaW50Lk5FVCA1LjEuOQADAACQBwAEAAAAMDIzMAGgAwABAAAAAQAAAAWgBAABAAAAlAAAAAAAAAACAAEAAgAEAAAAUjk4AAIABwAEAAAAMDEwMAAAAAArIfcnPEIHlAAAADJJREFUGFdjZGBgCAFiDMAMxDJA/BMdg3RYADEGAEmoQJioACQhCmGiApAEO4SJDBgYAHZNBc5zO1pqAAAAAElFTkSuQmCC",
+            ["Plus"]                = "iVBORw0KGgoAAAANSUhEUgAAAAMAAAADCAYAAABWKLW/AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAYdEVYdFNvZnR3YXJlAFBhaW50Lk5FVCA1LjEuOWxu2j4AAAC2ZVhJZklJKgAIAAAABQAaAQUAAQAAAEoAAAAbAQUAAQAAAFIAAAAoAQMAAQAAAAIAAAAxAQIAEAAAAFoAAABphwQAAQAAAGoAAAAAAAAAYAAAAAEAAABgAAAAAQAAAFBhaW50Lk5FVCA1LjEuOQADAACQBwAEAAAAMDIzMAGgAwABAAAAAQAAAAWgBAABAAAAlAAAAAAAAAACAAEAAgAEAAAAUjk4AAIABwAEAAAAMDEwMAAAAABMz8BIJY/XoAAAABdJREFUGFdjAIH/QACiGWEMOIAIMDAAAPlHC/bh3w+sAAAAAElFTkSuQmCC",
+            ["Minus"]               = "iVBORw0KGgoAAAANSUhEUgAAAAMAAAABCAIAAACUgoPjAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAYdEVYdFNvZnR3YXJlAFBhaW50Lk5FVCA1LjEuOWxu2j4AAAC2ZVhJZklJKgAIAAAABQAaAQUAAQAAAEoAAAAbAQUAAQAAAFIAAAAoAQMAAQAAAAIAAAAxAQIAEAAAAFoAAABphwQAAQAAAGoAAAAAAAAAYAAAAAEAAABgAAAAAQAAAFBhaW50Lk5FVCA1LjEuOQADAACQBwAEAAAAMDIzMAGgAwABAAAAAQAAAAWgBAABAAAAlAAAAAAAAAACAAEAAgAEAAAAUjk4AAIABwAEAAAAMDEwMAAAAABMz8BIJY/XoAAAABFJREFUGFdj/P//PwMQMDAAABf8Av8R5//oAAAAAElFTkSuQmCC"
+        }
+
+        for Name, Encoded in next, EncodedAssets do
+            local ImagePath = CheatName .. "/" .. CheatGame .. "/Assets/" .. Name
+
+            if isfile(ImagePath) then
+                delfile(ImagePath) -- ANCHOR If you dont want funny people changing assets then keep this, it should increase load time though
+                writefile(ImagePath, Base64Decode(Encoded))
+            else
+                writefile(ImagePath, Base64Decode(Encoded))
+            end
+
+            Assets[Name] = getcustomasset(ImagePath)
+        end
+    end
+
+
+    -- Fonts
+    do
+        function Menu:ImportFont(Name, Link, Weight, FontWeight, FontStyle)
+            local DotTTF  = Name .. ".ttf"
+            local DotFONT = Name .. ".font"
+
+            --if not isfile(DotTTF) then
+                writefile(DotTTF, HttpGet(Game, Link))
+            --end
+
+            writefile(DotFONT, JSONEncode(HttpService, {
+                name = Name,
+                faces = {{
+                    name = "Regular",
+                    weight = Weight,
+                    style = "normal",
+                    assetId = getcustomasset(DotTTF)
+                }}
+            }))
+
+            return NewFont(getcustomasset(DotFONT), FontWeight, FontStyle)
+        end
+
+        Fonts[1] = {
+            [1] = NewFont("rbxasset://fonts/families/Ubuntu.json", Enum.FontWeight.Regular, Enum.FontStyle.Normal),
+            [2] = 10,
+            [3] = NewRGB(205, 205, 205)
+        }
+
+        Fonts[2] = {
+            [1] = Menu:ImportFont("Verdana Bold", "https://github.com/Vendolius/Fonts/raw/refs/heads/main/Verdana%20Bold.ttf", 700, Enum.FontWeight.Bold, Enum.FontStyle.Normal),
+            [2] = 10,
+            [3] = NewRGB(204, 204, 204)
+        }
+
+        Fonts[3] = {
+            [1] = Menu:ImportFont("Smallest Pixel 7", "https://github.com/Vendolius/Fonts/raw/refs/heads/main/Smallest%20Pixel%207.ttf", 400, Enum.FontWeight.Regular, Enum.FontStyle.Normal),
+            [2] = 9,
+            [3] = NewRGB(114, 114, 114)
+        }
+
+        Fonts[4] = {
+            [1] = Menu:ImportFont("Proggy Clean", "https://github.com/Vendolius/Fonts/raw/refs/heads/main/Proggy%20Clean.ttf", 400, Enum.FontWeight.Regular, Enum.FontStyle.Normal),
+            [2] = 12,
+            [3] = White
+        }
+    end
+
+
+    -- Draw
+	do
+		function Draw:ScreenGui(Properties)
+			assert(Properties, "No properties for [ScreenGui] - " .. Traceback())
+
+			local Render = NewInstance("ScreenGui")
+			Render.ZIndexBehavior = Enum.ZIndexBehavior.Global
+			Render.IgnoreGuiInset = true
+			Render.DisplayOrder = 10
+
+			for Index, Value in next, Properties do
+				Render[Index] = Value
+			end
+
+			return Render
+		end
+		
+		function Draw:Frame(Properties)
+			assert(Properties, "No properties for [Frame] - " .. Traceback())
+
+			local Render = NewInstance("Frame")
+			Render.BorderSizePixel = 1
+			Render.BackgroundTransparency = 0
+			Render.BackgroundColor3 = Black
+			Render.BorderColor3 = Black
+			Render.ZIndex = 1
+			Render.Visible = true
+
+			for Index, Value in next, Properties do
+				Render[Index] = Value
+			end
+
+			return Render
+		end
+		
+		function Draw:ScrollingFrame(Properties)
+			assert(Properties, "No properties for [ScrollingFrame] - " .. Traceback())
+
+			local Render = NewInstance("ScrollingFrame")
+			Render.BorderSizePixel = 1
+			Render.BackgroundTransparency = 0
+			Render.BorderColor3 = Black
+			Render.BackgroundColor3 = Black
+			Render.ZIndex = 1
+			Render.Visible = true
+			
+			for Index, Value in next, Properties do
+				Render[Index] = Value
+			end
+
+			return Render
+		end
+		
+		function Draw:ImageLabel(Properties)
+			assert(Properties, "No properties for [ImageLabel] - " .. Traceback())
+
+			local Render = NewInstance("ImageLabel")
+			Render.BorderSizePixel = 1
+			Render.BackgroundTransparency = 0
+			Render.BackgroundColor3 = White
+			Render.ImageColor3 = White
+			Render.BorderColor3 = Black
+			Render.ResampleMode = Enum.ResamplerMode.Default
+			Render.ZIndex = 1
+			Render.Visible = true
+			
+			for Index, Value in next, Properties do
+				Render[Index] = Value
+			end
+
+			return Render
+		end
+		
+		function Draw:ImageButton(Properties)
+			assert(Properties, "No properties for [ImageButton] - " .. Traceback())
+
+			local Render = NewInstance("ImageButton")
+			Render.BorderSizePixel = 1
+			Render.BackgroundTransparency = 0
+			Render.BackgroundColor3 = White
+			Render.ImageColor3 = White
+			Render.BorderColor3 = Black
+			Render.ResampleMode = Enum.ResamplerMode.Default
+			Render.AutoButtonColor = false
+			Render.ZIndex = 1
+			Render.Visible = true
+			
+			for Index, Value in next, Properties do
+				Render[Index] = Value
+			end
+
+			return Render
+		end
+		
+		function Draw:TextLabel(Properties)
+			assert(Properties, "No properties for [TextLabel] - " .. Traceback())
+
+			local Render = NewInstance("TextLabel")
+			Render.BackgroundTransparency = 1
+			Render.TextStrokeTransparency = 1
+			Render.TextTransparency = 0
+			Render.BorderSizePixel = 0
+			Render.Text = "TextLabel"
+			Render.TextStrokeColor3 = Black
+			Render.FontFace = Fonts[1][1]
+			Render.TextSize = Fonts[1][2]
+            Render.TextColor3 = Fonts[1][3]
+			Render.ZIndex = 1
+			Render.Visible = true
+			
+			for Index, Value in next, Properties do
+				Render[Index] = Value
+			end
+
+			return Render
+		end
+
+        function Draw:TextButton(Properties)
+            assert(Properties, "No properties for [TextButton] - " .. Traceback())
+
+            local Render = NewInstance("TextButton")
+            Render.BorderSizePixel = 1
+            Render.BackgroundTransparency = 0
+            Render.TextStrokeTransparency = 1
+            Render.BorderColor3 = Black
+            Render.BackgroundColor3 = Black
+            Render.TextStrokeColor3 = Black
+            Render.FontFace = Fonts[1][1]
+            Render.TextSize = Fonts[1][2]
+            Render.TextColor3 = Fonts[1][3]
+            Render.AutoButtonColor = false
+            Render.RichText = true
+            Render.ZIndex = 1
+            Render.Visible = true
+
+			for Index, Value in next, Properties do
+				Render[Index] = Value
+			end
+
+			return Render
+        end
+
+        function Draw:Textbox(Properties)
+            assert(Properties, "No properties for [Textbox] - " .. Traceback())
+
+            local Render = NewInstance("TextBox")
+            Render.BorderSizePixel = 1
+            Render.BackgroundTransparency = 0
+            Render.TextStrokeTransparency = 1
+            Render.PlaceholderText = ""
+            Render.BorderColor3 = Black
+            Render.BackgroundColor3 = Black
+            Render.TextStrokeColor3 = Black
+            Render.FontFace = Fonts[1][1]
+            Render.TextSize = Fonts[1][2]
+            Render.TextColor3 = Fonts[1][3]
+            Render.ClearTextOnFocus = false
+            Render.ZIndex = 1
+            Render.Visible = true
+
+			for Index, Value in next, Properties do
+				Render[Index] = Value
+			end
+
+			return Render
+        end
+		
+		function Draw:UIListLayout(Properties)
+			assert(Properties, "No properties for [UIListLayout] - " .. Traceback())
+
+			local Render = NewInstance("UIListLayout")
+			Render.ItemLineAlignment = "Start"
+            Render.FillDirection = "Vertical"
+			Render.VerticalFlex = "Fill"
+			Render.Padding = NewUDim(0, 0)
+			Render.Wraps = false
+
+			for Index, Value in next, Properties do
+				Render[Index] = Value
+			end
+
+			return Render
+		end
+
+        function Draw:UIStroke(Properties)
+			assert(Properties, "No properties for [UIStroke] - " .. Traceback())
+
+            local Render = NewInstance("UIStroke")
+            Render.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+            Render.LineJoinMode = Enum.LineJoinMode.Miter
+            Render.Color = Black
+            Render.Transparency = 0
+            Render.Thickness = 1
+            Render.Enabled = true
+
+			for Index, Value in next, Properties do
+				Render[Index] = Value
+			end
+
+			return Render
+        end
+
+        function Draw:UIGradient(Properties)
+            assert(Properties, "No properties for [UIGradient] - " .. Traceback())
+
+            local Render = NewInstance("UIGradient")
+            Render.Offset = NewVector2(0, 0)
+            --Render.Transparency = 0
+            Render.Rotation = 90
+            Render.Enabled = true
+
+            for Index, Value in next, Properties do
+                Render[Index] = Value
+            end
+
+            return Render
+        end
+	end
+
+
+    -- Menu Functions
+    do
+        Menu.Overlay = Draw:ScreenGui({
+			Parent = Parameters.Parent,
+            IgnoreGuiInset = true,
+            Enabled = true
+		})
+
+        function Menu:GetTextBounds(Text, Font)
+            local Params = NewInstance("GetTextBoundsParams")
+
+            Params.Text = Text
+            Params.Font = Font[1]
+            Params.Size = Font[2]
+            Params.Width = ScreenSize.X
+
+            local Bounds = GetTextBoundsAsync(TextService, Params)
+
+            Destroy(Params)
+
+            return Bounds
+		end
+
+        function Menu:TruncateText(Text, Font, MaxWidth)
+            local FullBounds = Menu:GetTextBounds(Text, Font)
+            
+            if FullBounds.X <= MaxWidth then
+                return Text
+            end
+            
+            local Ellipsis = "..."
+            local AvailableWidth = MaxWidth - Menu:GetTextBounds(Ellipsis, Font).X
+            
+            if AvailableWidth <= 0 then
+                return Ellipsis
+            end
+            
+            local Low, High = 1, #Text
+            local BestLength = 1
+            
+            while Low <= High do
+                local Mid = Floor((Low + High) / 2 + 0.5)
+                local TestText = Sub(Text, 1, Mid)
+                local TestBounds = Menu:GetTextBounds(TestText, Font)
+                
+                if TestBounds.X <= AvailableWidth then
+                    BestLength = Mid
+                    Low = Mid + 1
+                else
+                    High = Mid - 1
+                end
+            end
+            
+            return Sub(Text, 1, BestLength) .. Ellipsis
+        end
+
+        function Menu:ChangeThemeColor(ColorIndex, ColorValue)
+            for Index, Value in next, Colors do
+                for i = 1, #Value do
+                    local ThemeTable = Value[i]
+
+                    if ThemeTable[1] ~= ColorIndex then
+                        continue
+                    end
+
+                    Index[ThemeTable[2]] = ColorValue
+                end
+
+                Theme[ColorIndex] = ColorValue
+            end
+        end
+
+        function Menu:RegisterFlag(Element, Flag)
+            if not Element or not Flag then return end
+
+            -- Nested flags: {"category", "enabled"} → Flags["category"]["enabled"]
+            if typeof(Flag) == "table" then
+                local Current = Flags
+
+                for i = 1, #Flag - 1 do
+                    local Key = Flag[i]
+
+                    assert(not SFind(tostring(Key), "%."), "RegisterFlag - Nested flag key '" .. tostring(Key) .. "' contains a dot!\n" .. Traceback())
+
+                    Current[Key] = Current[Key] or {}
+                    Current = Current[Key]
+                end
+
+                local FinalKey = Flag[#Flag]
+
+                assert(not SFind(tostring(FinalKey), "%."), "RegisterFlag - Nested flag key '" .. tostring(FinalKey) .. "' contains a dot!\n" .. Traceback())
+                assert(Current[FinalKey] == nil, "RegisterFlag - Nested flag path already contains key '" .. tostring(FinalKey) .. "'!\n" .. Traceback())
+
+                Current[FinalKey] = Element
+            elseif typeof(Flag) == "string" then
+
+                assert(not SFind(Flag, "%."), "RegisterFlag - Flag '" .. Flag .. "' contains a dot!\n" .. Traceback())
+                assert(Flags[Flag] == nil, "RegisterFlag - Flag '" .. Flag .. "' already exists!\n" .. Traceback())
+
+                Flags[Flag] = Element
+            else
+                warn("Invalid flag type!\n" .. Traceback())
+            end
+        end
+    end
+
+
+    -- Window Class -- Doesn't actually need to be a class right now, there is only a main window
+    do
+        function Window.new(Parameters)
+            if Menu.Window then return end
+
+            local Self = {
+                Class = "Window",
+
+                Pages = {},
+                PagesIndex = 0,
+                CurrentPage = nil,
+                
+                IsOpen = false,
+
+                ZIndex = ZIndex
+            } setmetatable(Self, Window)
+
+
+            -- Rendering
+            do
+                local ZIndex = Self.ZIndex
+                
+                local Size = Parameters.Size - NewUDim2(0, 2, 0, 2)
+
+                local Outline = Draw:Frame({
+                    Name = "Outline",
+                    Parent = Menu.Overlay,
+                    Position = NewUDim2(0.5, -Size.X.Offset / 2, 0.5, -Size.Y.Offset / 2),
+                    Size = Size,
+                    BackgroundColor3 = NewRGB(40, 40, 40),
+                    BorderColor3 = NewRGB(60, 60, 60),
+                    BorderMode = Enum.BorderMode.Inset,
+                    Visible = Self.IsOpen,
+                    ZIndex = ZIndex
+                }) ZIndex += 1
+
+                Draw:UIStroke({
+                    Parent = Outline,
+                    Color = NewRGB(12, 12, 12),
+                    Enabled = true
+                })
+
+                local Inline = Draw:Frame({
+                    Name = "Inline",
+                    Parent = Outline,
+                    Position = NewUDim2(0, 4, 0, 4),
+                    Size = NewUDim2(1, -8, 1, -8),
+                    BackgroundColor3 = NewRGB(12, 12, 12),
+                    BorderColor3 = NewRGB(60, 60, 60),
+                    Visible = true,
+                    ZIndex = ZIndex
+                }) ZIndex += 1
+
+                local Rainbow = Draw:Frame({
+                    Name = "Rainbow",
+                    Parent = Inline,
+                    Position = NewUDim2(0, 1, 0, 1),
+                    Size = NewUDim2(1, -2, 0, 2),
+                    BackgroundColor3 = White,
+                    BorderSizePixel = 0,
+                    Visible = true,
+                    ZIndex = ZIndex
+                }) ZIndex += 1
+
+                Draw:UIGradient({
+                    Parent = Rainbow,
+                    Rotation = 0,
+                    Color = NewColorSequence({
+                        NewColorSequenceKeypoint(0,   NewRGB(55, 177, 218)),
+                        NewColorSequenceKeypoint(0.5, NewRGB(204, 70, 205)),
+                        NewColorSequenceKeypoint(1,   NewRGB(204, 227, 53)),
+                    })
+                })
+
+                local Shade = Draw:Frame({
+                    Name = "Shade",
+                    Parent = Rainbow,
+                    Position = NewUDim2(0, 0, 0, 1),
+                    Size = NewUDim2(1, 0, 1, 0),
+                    BackgroundColor3 = Black,
+                    BorderSizePixel = 0,
+                    BackgroundTransparency = 0.5,
+                    Visible = true,
+                    ZIndex = ZIndex
+                }) ZIndex += 1
+
+                local ContentHolder = Draw:Frame({
+                    Name = "ContentHolder",
+                    Parent = Inline,
+                    Position = NewUDim2(0, 75, 0, 4),
+                    Size = NewUDim2(1, -75, 1, -4),
+                    BackgroundColor3 = NewRGB(20, 20, 20),
+                    BorderSizePixel = 0,
+                    Visible = true,
+                    ZIndex = ZIndex
+                }) ZIndex += 1
+
+                local Sizer = Draw:ImageButton({
+                    Name = "Sizer",
+                    Parent = ContentHolder,
+                    Position = NewUDim2(1, -5, 1, -5),
+                    Size = NewUDim2(0, 5, 0, 5),
+                    Image = Assets["Sizer"],
+                    ImageTransparency = 0,
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    Visible = true,
+                    ZIndex = ZIndex + 1000
+                }) ZIndex += 1
+
+                local PagesOutline = Draw:Frame({
+                    Name = "PagesOutline",
+                    Parent = ContentHolder,
+                    Position = NewUDim2(0, -2, 0, 0),
+                    Size = NewUDim2(0, 1, 1, 0),
+                    BackgroundColor3 = Black,
+                    BorderSizePixel = 0,
+                    Visible = true,
+                    ZIndex = ZIndex
+                }) ZIndex += 1
+
+                local PagesInline = Draw:Frame({
+                    Name = "PagesInline",
+                    Parent = ContentHolder,
+                    Position = NewUDim2(0, -1, 0, 0),
+                    Size = NewUDim2(0, 1, 1, 0),
+                    BackgroundColor3 = NewRGB(40, 40, 40),
+                    BorderSizePixel = 0,
+                    Visible = true,
+                    ZIndex = ZIndex
+                }) ZIndex += 1
+
+                Self.ZIndex = ZIndex
+
+                Self.Outline = Outline
+                Self.Inline = Inline
+                Self.Rainbow = Rainbow
+
+                Self.Sizer = Sizer
+                Self.ContentHolder = ContentHolder
+            end
+
+
+            -- Connections
+            do
+                local Outline = Self.Outline
+
+                Self.Outline.InputBegan:Connect(function(Input)
+                    if Input.UserInputType ~= Enum.UserInputType.MouseButton1 or not Self.IsOpen then
+                        return
+                    end
+
+                    local StartMousePosition = NewVector2(Mouse.X, Mouse.Y)
+                    local StartPosition = Outline.Position
+                    local AbsoluteSize = Outline.AbsoluteSize
+
+                    local OffsetX = StartMousePosition.X - (StartPosition.X.Offset - AbsoluteSize.X + AbsoluteSize.X)
+                    local OffsetY = StartMousePosition.Y - (StartPosition.Y.Offset - AbsoluteSize.Y + AbsoluteSize.Y)
+
+                    local Connection
+                    Connection = RenderStepped:Connect(function()
+                        if not IsMouseButtonPressed(UserInputService, Enum.UserInputType.MouseButton1) then
+                            Connection:Disconnect()
+                            return
+                        end
+
+                        local CurrentMousePosition = NewVector2(Mouse.X, Mouse.Y)
+
+                        Outline.Position = NewUDim2(
+                            StartPosition.X.Scale,
+                            CurrentMousePosition.X - OffsetX,
+                            StartPosition.Y.Scale,
+                            CurrentMousePosition.Y - OffsetY
+                        )
+                    end)
+                end)
+
+                local Sizer = Self.Sizer
+                Sizer.InputBegan:Connect(function(Input)
+                    if Input.UserInputType ~= Enum.UserInputType.MouseButton1 then 
+                        return 
+                    end
+
+                    if Menu.CurrentContent then
+                        Menu.CurrentContent:Close()
+                    end
+
+                    local StartMousePosition = NewVector2(Mouse.X, Mouse.Y)
+                    local StartSize = Outline.Size
+                    local StartPosition = Outline.Position
+                    local ParentSize = Outline.Parent.AbsoluteSize
+
+                    local Connection; Connection = RenderStepped:Connect(function()
+                        if not IsMouseButtonPressed(UserInputService, Enum.UserInputType.MouseButton1) then
+                            Connection:Disconnect()
+                            return
+                        end
+
+                        local Delta = NewVector2(Mouse.X, Mouse.Y) - StartMousePosition
+                        Outline.Size = NewUDim2(StartSize.X.Scale, Clamp(StartSize.X.Offset + Delta.X, 658, ParentSize.X - StartPosition.X.Offset), StartSize.Y.Scale, Clamp(StartSize.Y.Offset + Delta.Y, 558, ParentSize.Y - StartPosition.Y.Offset))
+                        Outline.Position = StartPosition
+
+                        for i = 1, Self.PagesIndex do
+                            Self.Pages[i]:UpdateSectionSizes()
+                        end
+                    end)
+                end)
+
+                local MenuKeys = {
+                    [Enum.KeyCode.Home] = true,
+                    [Enum.KeyCode.Delete] = true,
+                    [Enum.KeyCode.Backquote] = true,
+                }
+
+                Menu.InputBegan[#Menu.InputBegan + 1] = function(Input)
+                    if Input.UserInputType == Enum.UserInputType.Keyboard and MenuKeys[Input.KeyCode] then
+                        Self[Self.IsOpen and "Close" or "Open"](Self)
+                    end
+                end
+            end
+
+            local Tabs = Parameters.Tabs
+            for i = 1, #Tabs do
+                Self:CreatePage(Tabs[i])
+            end
+
+            return Self
+        end
+
+        function Window:CreatePage(Parameters)
+            local Window = self
+
+            local Name = Parameters.Name
+            local Icon = Parameters.Icon or Assets[Window.PagesIndex + 1]
+            local Open = Parameters.Open or false
+
+            local Page = {
+                Class = "Page",
+                Window = Window,
+                ZIndex = Window.ZIndex,
+
+                TopOffset = 21,
+                BottomOffset = 21,
+                Padding = 21,
+
+                Sections = {
+                    [1] = {},
+                    [2] = {}
+                },
+                
+                IsOpen = false
+            }
+
+
+            -- Rendering
+            do
+                local ZIndex = Page.ZIndex
+
+                local Outline = Draw:Frame({
+                    Name = "Outline",
+                    Parent = Window.Inline,
+                    Position = NewUDim2(0, 0, 0, 12 + (66 * Window.PagesIndex)), -- 9, 78
+                    Size = NewUDim2(0, 73, 0, 66),
+                    BackgroundColor3 = NewRGB(40, 40, 40),
+                    BorderColor3 = Black,
+                    BackgroundTransparency = 1,
+                    Visible = true,
+                    ZIndex = ZIndex
+                }) ZIndex += 1
+
+                local Right = Draw:Frame({
+                    Name = "Right",
+                    Parent = Outline,
+                    Position = NewUDim2(1, 0, 0, 0),
+                    Size = NewUDim2(0, 1, 1, 0),
+                    BackgroundColor3 = NewRGB(40, 40, 40),
+                    BorderSizePixel = 0,
+                    BackgroundTransparency = 1,
+                    Visible = true,
+                    ZIndex = ZIndex
+                })
+
+                local Left = Draw:Frame({
+                    Name = "Left",
+                    Parent = Outline,
+                    Position = NewUDim2(0, -1, 0, -1),
+                    Size = NewUDim2(0, 1, 1, 2),
+                    BackgroundColor3 = NewRGB(60, 60, 60),
+                    BorderSizePixel = 0,
+                    Visible = true,
+                    ZIndex = ZIndex
+                })
+
+                local Background = Draw:ImageButton({
+                    Name = "Background",
+                    Parent = Outline,
+                    Position = NewUDim2(0, 0, 0, 1),
+                    Size = NewUDim2(1, 2, 1, -2),
+                    BackgroundColor3 = NewRGB(20, 20, 20),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    ScaleType = "Tile",
+                    TileSize = NewUDim2(0, 4, 0, 8),
+                    Image = Assets["Tile Background 2"],
+                    ImageColor3 = NewRGB(12, 12, 12),
+                    ImageTransparency = 1,
+                    Visible = true,
+                    ZIndex = ZIndex
+                }) ZIndex += 1
+
+                local Image = Draw:ImageLabel({
+                    Name = "Image",
+                    Parent = Outline,
+                    Position = NewUDim2(0, 16, 0, 12), -- NewUDim2(0, 12, 0, 8)
+                    Size = NewUDim2(0, 42, 0, 42), -- NewUDim2(0, 50, 0, 50)
+                    BackgroundTransparency = 1,
+                    Image = Icon,
+                    ImageColor3 = NewRGB(90, 90, 90),
+                    ImageTransparency = 0,
+                    Visible = true,
+                    ZIndex = ZIndex
+                }) ZIndex += 1
+
+                local ContentHolder = Draw:ImageLabel({
+                    Name = "ContentHolder",
+                    Parent = Window.ContentHolder,
+                    Position = NewUDim2(0, 1, 0, 0),
+                    Size = NewUDim2(1, -2, 1, 0),
+                    BackgroundColor3 = White,
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    ScaleType = Enum.ScaleType.Tile,
+                    TileSize = NewUDim2(0, 4, 0, 8),
+                    Image = Assets["Tile Background"],
+                    ImageColor3 = NewRGB(12, 12, 12),
+                    ImageTransparency = 0,
+                    Visible = false,
+                    ZIndex = ZIndex
+                }) ZIndex += 1
+
+                Page.Outline = Outline
+                Page.Right = Right
+                Page.Left = Left
+                Page.Background = Background
+                Page.Image = Image
+                Page.ContentHolder = ContentHolder
+
+                Page.ZIndex = ZIndex
+            end
+
+
+            -- Functions
+            do
+                function Page:Open()
+                    local CurrentPage = Window.CurrentPage
+
+                    if CurrentPage then
+                        if CurrentPage == Page then
+                            return
+                        end
+
+                        if Menu.CurrentContent then
+                            Menu.CurrentContent:Close()
+                        end
+
+                        CurrentPage.IsOpen = false
+
+                        CurrentPage.ContentHolder.Visible = false
+                        CurrentPage.Background.BackgroundTransparency = 1
+                        CurrentPage.Background.ImageTransparency = 1
+                        CurrentPage.Right.BackgroundTransparency = 1
+                        CurrentPage.Outline.BackgroundTransparency = 1
+                        CurrentPage.Image.ImageColor3 = NewRGB(90, 90, 90)
+                    end
+
+                    Window.CurrentPage = Page
+                    Page.IsOpen = true
+                    
+                    Page.ContentHolder.Visible = true
+                    Page.Background.BackgroundTransparency = 0
+                    Page.Background.ImageTransparency = 0
+                    Page.Right.BackgroundTransparency = 0
+                    Page.Outline.BackgroundTransparency = 0
+                    Page.Image.ImageColor3 = NewRGB(210, 210, 210)
+                end
+
+                function Page:CreateCategories(Parameters)
+                    assert(#Page.Sections[1] == 0, "To create categories, there must be no sections created!\n" .. Traceback())
+                    assert(#Page.Sections[2] == 0, "To create categories, there must be no sections created!\n" .. Traceback())
+
+                    -- Parameters
+                    local Parameters = Parameters or {}
+                    local Name = Parameters.Name or "Categories"
+                    local Categories = Parameters.Categories or {
+                        [1] = {Position = NewUDim2(0, 20, 0, 20), Size = NewUDim2(0, 42, 0, 18), Icon = Assets["USP-S"], Open = true},
+                        [2] = {Position = NewUDim2(0, 90, 0, 20), Size = NewUDim2(0, 42, 0, 18), Icon = Assets["CZ-75"]},
+                        [3] = {Position = NewUDim2(0, 162, 0, 20), Size = NewUDim2(0, 42, 0, 18), Icon = Assets["MP-9"]},
+                        [4] = {Position = NewUDim2(0, 239, 0, 20), Size = NewUDim2(0, 42, 0, 18), Icon = Assets["MAG-7"]},
+                        [5] = {Position = NewUDim2(0, 316, 0, 20), Size = NewUDim2(0, 80, 0, 18), Icon = Assets["M4A1-S"]},
+                        [6] = {Position = NewUDim2(0, 426, 0, 20), Size = NewUDim2(0, 61, 0, 18), Icon = Assets["SSG-008"]}
+                    }
+                    local Callback = Parameters.Callback or function() end
+
+                    -- If page has categories, it can not have it's own sections
+                    Page.Sections = nil
+
+                    Page.Categories = {}
+                    Page.CurrentCategory = nil
+                    local ZIndex = Page.ZIndex
+
+                    -- Rendering (HOLDER)
+                    do
+                        local Outline = Draw:Frame({
+                            Parent = Page.ContentHolder,
+                            Position = NewUDim2(0, 20, 0, 21),
+                            Size = NewUDim2(1, -40, 0, 61),
+                            BackgroundColor3 = NewRGB(40, 40, 40),
+                            BorderColor3 = NewRGB(12, 12, 12),
+                            ZIndex = ZIndex,
+                            Visible = true
+                        }) ZIndex += 1
+
+                        local ContentHolder = Draw:Frame({
+                            Parent = Outline,
+                            Position = NewUDim2(0, 1, 0, 1),
+                            Size = NewUDim2(1, -2, 1, -2),
+                            BackgroundColor3 = NewRGB(40, 40, 40),
+                            BorderColor3 = NewRGB(40, 40, 40),
+                            ZIndex = ZIndex,
+                            Visible = true
+                        }) ZIndex += 1
+
+                        local Background = Draw:Frame({
+                            Parent = ContentHolder,
+                            Position = NewUDim2(0, 0, 0, 0),
+                            Size = NewUDim2(1, 0, 1, 0),
+                            BackgroundColor3 = NewRGB(23, 23, 23),
+                            BorderSizePixel = 0,
+                            ZIndex = ZIndex,
+                            Visible = true
+                        }) ZIndex += 1
+
+                        local TitleBackground = Draw:Frame({
+                            Parent = Outline,
+                            Position = NewUDim2(0, 9, 0, -1),
+                            Size = NewUDim2(0, Menu:GetTextBounds(Name, Fonts[2]).X + 7, 0, 2),
+                            BackgroundColor3 = NewRGB(23, 23, 23),
+                            BorderSizePixel = 0,
+                            ZIndex = ZIndex,
+                            Visible = true
+                        }) ZIndex += 1
+
+                        local Title = Draw:TextLabel({
+                            Parent = TitleBackground,
+                            Position = NewUDim2(0, 0, 0, -2),
+                            Size = NewUDim2(1, 0, 1, 0),
+                            Text = Name,
+                            FontFace = Fonts[2][1],
+                            TextSize = Fonts[2][2],
+                            TextColor3 = NewRGB(205, 205, 205),
+                            ZIndex = ZIndex,
+                            Visible = true
+                        }) ZIndex += 1
+
+                        local TitleShadow = Draw:TextLabel({
+                            Parent = Title,
+                            Position = NewUDim2(0, 1, 0, 1),
+                            Size = NewUDim2(1, 0, 1, 0),
+                            Text = Name,
+                            FontFace = Fonts[2][1],
+                            TextSize = Fonts[2][2],
+                            TextColor3 = NewRGB(12, 12, 12),
+                            ZIndex = ZIndex - 2,
+                            Visible = true
+                        }) ZIndex += 1
+
+                        Page.CategoriesFramework = ContentHolder
+                    end
+
+                    -- Rendering (CATEGORIES)
+                    do
+                        for i = 1, #Categories do
+                            local Current = Categories[i]
+
+                            local Category = {
+                                IsOpen = false,
+                                Sections = {
+                                    [1] = {},
+                                    [2] = {}
+                                } -- I need it this way because of section moving, also this allows me to have global sections in a page with categories. (ALLOWED ME, NOW IT DOESNT.. TODO FIX THIS I WANT EMMM)
+                            }
+
+                            local Icon = Draw:ImageButton({
+                                Parent = Page.CategoriesFramework,
+                                Position = Current.Position,
+                                Size = Current.Size,
+                                Image = Current.Icon,
+                                ImageColor3 = NewRGB(96, 96, 96),
+                                ImageTransparency = Current.Transparency or 0,
+                                BackgroundTransparency = 1,
+                                ZIndex = ZIndex + 1,
+                                Visible = true
+                            })
+
+                            Category.Image = Icon
+
+                            function Category:Open()
+                                local CurrentCategory = Page.CurrentCategory
+
+                                if CurrentCategory then
+                                    if CurrentCategory == Category then
+                                        return
+                                    end
+
+                                    if Menu.CurrentContent then
+                                        Menu.CurrentContent:Close()
+                                    end
+
+                                    CurrentCategory.IsOpen = false
+                                    CurrentCategory.Image.ImageColor3 = NewRGB(110, 110, 110)
+
+                                    for k = 1, 2 do
+                                        local Sections = CurrentCategory.Sections[k]
+
+                                        for j = 1, #Sections do
+                                            Sections[j].Outline.Visible = false
+                                        end
+                                    end
+                                end
+
+                                Page.CurrentCategory = Category
+                                Category.IsOpen = true
+                                Category.Image.ImageColor3 = NewRGB(210, 210, 210)
+
+                                for k = 1, 2 do
+                                    local Sections = Category.Sections[k]
+
+                                    for j = 1, #Sections do
+                                        Sections[j].Outline.Visible = true
+                                    end
+                                end
+                            end
+
+                            Icon.MouseButton1Down:Connect(function()
+                                Category:Open()
+                            end)
+
+                            Icon.MouseEnter:Connect(function()
+                                Icon.ImageColor3 = Category.IsOpen and NewRGB(210, 210, 210) or NewRGB(187, 187, 187)
+                            end)
+
+                            Icon.MouseLeave:Connect(function()
+                                Icon.ImageColor3 = Category.IsOpen and NewRGB(210, 210, 210) or NewRGB(110, 110, 110)
+                            end)
+                            
+                            if Current.Open then
+                                Category:Open()
+                            end
+
+                            Page.Categories[#Page.Categories + 1] = Category
+                        end
+                    end
+
+                    Page.TopOffset = Page.TopOffset + Page.CategoriesFramework.AbsoluteSize.Y + Page.Padding
+
+                    return Page.Categories
+                end
+
+                function Page:CreateSection(Parameters)
+                    -- Parameters
+                    local Parameters = Parameters or {}
+                    local Name = Parameters.Name or "New Section"
+                    local Side = Parameters.Side or 1
+                    local Length = Parameters.Length or 0.25
+
+                    local Section = {
+                        Class = "Section",
+
+                        Name = Name,
+                        Side = Side,
+                        Length = Length,
+
+                        Offset = 20,
+
+                        ZIndex = Page.ZIndex
+                    }
+
+                    local PageHasCategories = Page.Categories ~= nil
+                    local Category = PageHasCategories and Page.Categories[Parameters.Category]
+                    local SectionsContainer = Category and Category.Sections or Page.Sections
+
+                    -- Rendering
+                    do
+                        local ZIndex = Section.ZIndex
+
+                        local Outline = Draw:Frame({
+                            Parent = Page.ContentHolder,
+                            Position = NewUDim2(0, 21, 0, 21),
+                            Size = NewUDim2(0.5, -31, 0, 100),
+                            BackgroundColor3 = NewRGB(40, 40, 40),
+                            BorderColor3 = NewRGB(12, 12, 12),
+                            ZIndex = ZIndex,
+                            Visible = (not PageHasCategories) or (Page.CurrentCategory == Category)
+                        }) ZIndex += 1
+
+                        local ContentHolder = Draw:ScrollingFrame({
+                            Parent = Outline,
+                            Position = NewUDim2(0, 1, 0, 1),
+                            Size = NewUDim2(1, -2, 1, -2),
+                            BackgroundColor3 = NewRGB(40, 40, 40),
+                            BorderColor3 = NewRGB(40, 40, 40),
+                            ScrollBarImageColor3 = NewRGB(65, 65, 65),
+                            ScrollBarThickness = 5,
+                            MidImage = Assets["Scroll Bar"],
+                            TopImage = Assets["Scroll Bar"],
+                            BottomImage = Assets["Scroll Bar"],
+                            VerticalScrollBarInset = Enum.ScrollBarInset.None,
+                            ZIndex = ZIndex,
+                            Visible = true
+                        }) ZIndex += 1
+
+                        local Background = Draw:Frame({
+                            Parent = ContentHolder,
+                            Position = NewUDim2(0, 0, 0, 0),
+                            Size = NewUDim2(1, 0, 1, 0),
+                            BackgroundColor3 = NewRGB(23, 23, 23),
+                            BorderSizePixel = 0,
+                            ZIndex = ZIndex,
+                            Visible = true
+                        }) ZIndex += 1
+
+                        local ArrowUp = Draw:ImageLabel({
+                            Parent = Outline,
+                            Position = NewUDim2(1, -17, 0, 6),
+                            Size = NewUDim2(0, 5, 0, 4),
+                            Image = Assets["Arrow Up"],
+                            ImageColor3 = NewRGB(205, 205, 205),
+                            ImageTransparency = 1,
+                            BackgroundTransparency = 1,
+                            BorderSizePixel = 0,
+                            ZIndex = ZIndex,
+                            Visible = true
+                        })
+
+                        local ArrowDown = Draw:ImageLabel({
+                            Parent = Outline,
+                            Position = NewUDim2(1, -17, 1, -10),
+                            Size = NewUDim2(0, 5, 0, 4),
+                            Image = Assets["Arrow Down"],
+                            ImageColor3 = NewRGB(205, 205, 205),
+                            ImageTransparency = 1,
+                            BackgroundTransparency = 1,
+                            BorderSizePixel = 0,
+                            ZIndex = ZIndex,
+                            Visible = true
+                        })
+
+                        local TitleBackground = Draw:TextButton({
+                            Parent = Outline,
+                            Position = NewUDim2(0, 9, 0, -1),
+                            Size = NewUDim2(0, Menu:GetTextBounds(Name, Fonts[2]).X + 7, 0, 2),
+                            BackgroundColor3 = NewRGB(23, 23, 23),
+                            BorderSizePixel = 0,
+                            Text = "",
+                            ZIndex = ZIndex,
+                            Visible = true
+                        }) ZIndex += 1
+
+                        local Title = Draw:TextLabel({
+                            Parent = TitleBackground,
+                            Position = NewUDim2(0, 0, 0, -2),
+                            Size = NewUDim2(1, 0, 1, 0),
+                            Text = Name,
+                            FontFace = Fonts[2][1],
+                            TextSize = Fonts[2][2],
+                            TextColor3 = NewRGB(205, 205, 205),
+                            ZIndex = ZIndex,
+                            Visible = true
+                        }) ZIndex += 1
+
+                        local TitleShadow = Draw:TextLabel({
+                            Parent = Title,
+                            Position = NewUDim2(0, 1, 0, 1),
+                            Size = NewUDim2(1, 0, 1, 0),
+                            Text = Name,
+                            FontFace = Fonts[2][1],
+                            TextSize = Fonts[2][2],
+                            TextColor3 = NewRGB(12, 12, 12),
+                            ZIndex = ZIndex - 2,
+                            Visible = true
+                        }) ZIndex += 1
+
+                        Section.Outline = Outline
+                        Section.ContentHolder = ContentHolder
+                        Section.Title = Title
+                        Section.TitleBackground = TitleBackground
+                        Section.ArrowUp = ArrowUp
+                        Section.ArrowDown = ArrowDown
+                        Section.ZIndex = ZIndex
+                    end
+
+                    -- Functions
+                    do
+                        function Section:UpdateScroll()
+                            local ContentHolder = Section.ContentHolder
+                            local Delta = Section.Offset - ContentHolder.AbsoluteSize.Y
+
+                            if Delta > -11 then
+                                ContentHolder.ScrollingEnabled = true
+                                ContentHolder.CanvasSize = NewUDim2(0, 0, 1, Delta + 9)
+                            else
+                                ContentHolder.ScrollingEnabled = false
+                                ContentHolder.CanvasSize = NewUDim2(0, 0, 0, 0)
+                            end
+
+                            Section.ArrowUp.ImageTransparency = (ContentHolder.CanvasPosition.Y - 12) <= 0 and 1 or 0
+                            Section.ArrowDown.ImageTransparency = (ContentHolder.AbsoluteCanvasSize.Y - (ContentHolder.CanvasPosition.Y + 10) >= ContentHolder.AbsoluteWindowSize.Y) and 0 or 1
+                        end
+                    end
+
+
+                    -- Elements
+                    do
+                        function Section:CreateToggle(Parameters)
+                            local Element = Toggle.new({
+                                ContentHolder = Section.ContentHolder,
+                                Offset = {0, Section.Offset},
+                                ZIndex = Section.ZIndex
+                            }, Parameters)
+
+                            Menu:RegisterFlag(Element, Parameters and Parameters.Flag)
+
+                            Section.Offset = Section.Offset + Element.Height
+                            Section:UpdateScroll()
+
+                            return Element
+                        end
+
+                        function Section:CreateSlider(Parameters)
+                            local Element = Slider.new({
+                                ContentHolder = Section.ContentHolder,
+                                Offset = {0, Section.Offset},
+                                ZIndex = Section.ZIndex
+                            }, Parameters)
+
+                            Menu:RegisterFlag(Element, Parameters and Parameters.Flag)
+
+                            Section.Offset = Section.Offset + Element.Height
+                            Section:UpdateScroll()
+
+                            return Element
+                        end
+
+                        function Section:CreateDropdown(Parameters)
+                            local Element = Dropdown.new({
+                                ContentHolder = Section.ContentHolder,
+                                Offset = {0, Section.Offset},
+                                ZIndex = Section.ZIndex
+                            }, Parameters)
+
+                            Menu:RegisterFlag(Element, Parameters and Parameters.Flag)
+
+                            Section.Offset = Section.Offset + Element.Height
+                            Section:UpdateScroll()
+
+                            return Element
+                        end
+
+                        function Section:CreateCombobox(Parameters)
+                            local Element = Combobox.new({
+                                ContentHolder = Section.ContentHolder,
+                                Offset = {0, Section.Offset},
+                                ZIndex = Section.ZIndex
+                            }, Parameters)
+
+                            Menu:RegisterFlag(Element, Parameters and Parameters.Flag)
+
+                            Section.Offset = Section.Offset + Element.Height
+                            Section:UpdateScroll()
+
+                            return Element
+                        end
+
+                        function Section:CreateButton(Parameters)
+                            local Element = Button.new({
+                                ContentHolder = Section.ContentHolder,
+                                Offset = {0, Section.Offset},
+                                ZIndex = Section.ZIndex
+                            }, Parameters)
+
+                            Menu:RegisterFlag(Element, Parameters and Parameters.Flag)
+
+                            Section.Offset = Section.Offset + Element.Height
+                            Section:UpdateScroll()
+
+                            return Element
+                        end
+
+                        function Section:CreateLabel(Parameters)
+                            local Element = Label.new({
+                                ContentHolder = Section.ContentHolder,
+                                Offset = {39, Section.Offset - 2},
+                                ZIndex = Section.ZIndex
+                            }, Parameters)
+
+                            Menu:RegisterFlag(Element, Parameters and Parameters.Flag)
+
+                            Section.Offset = Section.Offset + Element.Height
+                            Section:UpdateScroll()
+
+                            return Element
+                        end
+
+                        function Section:CreateColorpicker(Parameters)
+                            local Label = Label.new({
+                                ContentHolder = Section.ContentHolder,
+                                Offset = {39, Section.Offset - 2},
+                                ZIndex = Section.ZIndex
+                            }, {
+                                Text = Parameters and Parameters.Name or "Colorpicker"
+                            })
+
+                            local Colorpicker = Colorpicker.new({
+                                ContentHolder = Section.ContentHolder,
+                                Position = NewUDim2(1, -34, 0, Section.Offset),
+                                ZIndex = Section.ZIndex
+                            }, Parameters)
+
+                            Menu:RegisterFlag(Colorpicker, Parameters and Parameters.Flag)
+
+                            Section.Offset = Section.Offset + Label.Height
+                            Section:UpdateScroll()
+
+                            return Colorpicker
+                        end
+
+                        function Section:CreateHotkey(Parameters)
+                            local Label = Label.new({
+                                ContentHolder = Section.ContentHolder,
+                                Offset = {39, Section.Offset - 2},
+                                ZIndex = Section.ZIndex
+                            }, {
+                                Text = Parameters and Parameters.Name or "Hotkey"
+                            })
+
+                            local Hotkey = Hotkey.new({
+                                ContentHolder = Section.ContentHolder,
+                                Position = NewUDim2(1, -34, 0, Section.Offset - 1),
+                                ZIndex = Section.ZIndex
+                            }, Parameters)
+
+                            Menu:RegisterFlag(Hotkey, Parameters and Parameters.Flag)
+
+                            Section.Offset = Section.Offset + Label.Height
+                            Section:UpdateScroll()
+
+                            return Hotkey
+                        end
+
+                        function Section:CreateTextbox(Parameters)
+                            local Element = Textbox.new({
+                                ContentHolder = Section.ContentHolder,
+                                Offset = {0, Section.Offset},
+                                ZIndex = Section.ZIndex
+                            }, Parameters)
+
+                            Menu:RegisterFlag(Element, Parameters and Parameters.Flag)
+
+                            Section.Offset = Section.Offset + Element.Height
+                            Section:UpdateScroll()
+
+                            return Element
+                        end
+
+                        function Section:CreateList(Parameters)
+                            local Element = List.new({
+                                ContentHolder = Section.ContentHolder,
+                                Offset = {0, Section.Offset},
+                                ZIndex = Section.ZIndex
+                            }, Parameters)
+
+                            Menu:RegisterFlag(Element, Parameters and Parameters.Flag)
+
+                            Section.Offset = Section.Offset + Element.Height
+                            Section:UpdateScroll()
+
+                            return Element
+                        end
+
+                        function Section:CreateSearchList(Parameters)
+                            local Textbox = Textbox.new({
+                                ContentHolder = Section.ContentHolder,
+                                Offset = {0, Section.Offset},
+                                ZIndex = Section.ZIndex
+                            }, Parameters)
+
+                            local List = List.new({
+                                ContentHolder = Section.ContentHolder,
+                                Offset = {0, Section.Offset + Textbox.Height - 7},
+                                ZIndex = Section.ZIndex - 1
+                            }, Parameters)
+
+                            Section.Offset = Section.Offset + Textbox.Height + List.Height - 4
+                            Section:UpdateScroll()
+
+                            Textbox.Callback = function(Value)
+                                List:Filter(Value)
+                            end
+
+                            return List
+                        end
+                    end
+
+
+                    -- Dragging
+                    do
+                        local Dragging = false
+                        local DragConnection
+                        local OriginalSide = Section.Side
+
+                        Section.TitleBackground.MouseButton1Down:Connect(function()
+                            Dragging = true
+                            local ParentAbsolutePosition = Page.ContentHolder.AbsolutePosition
+                            local Offset = NewVector2(Mouse.X, Mouse.Y) - Section.Outline.AbsolutePosition
+
+                            Section.Outline.BorderColor3 = Theme["Accent"]
+
+                            DragConnection = RenderStepped:Connect(function()
+                                if not Dragging then return end
+
+                                local NewPosition = NewVector2(Mouse.X, Mouse.Y) - Offset
+                                Section.Outline.Position = NewUDim2(0, NewPosition.X - ParentAbsolutePosition.X, 0, NewPosition.Y - ParentAbsolutePosition.Y)
+
+                                local SnapList = SectionsContainer[Section.Side]
+                                local NewSide = (Mouse.X < ParentAbsolutePosition.X + Page.ContentHolder.AbsoluteSize.X / 2) and 1 or 2
+
+                                if NewSide ~= Section.Side then
+                                    for i = 1, #SnapList do
+                                        if SnapList[i] == Section then
+                                            Remove(SnapList, i)
+                                            break
+                                        end
+                                    end
+                                    SectionsContainer[NewSide][#SectionsContainer[NewSide] + 1] = Section
+                                    Section.Side = NewSide
+                                    SnapList = SectionsContainer[NewSide]
+                                    Page:UpdateSectionSizes()
+                                end
+
+                                Sort(SnapList, function(A, B)
+                                    return A.Outline.AbsolutePosition.Y < B.Outline.AbsolutePosition.Y
+                                end)
+
+                                local YOffset = Page.TopOffset
+                                for i = 1, #SnapList do
+                                    local CurrentSection = SnapList[i]
+
+                                    if CurrentSection ~= Section then
+                                        local XOffset = CurrentSection.Outline.Position.X.Offset
+                                        CurrentSection.Outline.Position = NewUDim2(0, XOffset, 0, YOffset)
+                                    end
+
+                                    CurrentSection.Index = i
+                                    YOffset = YOffset + CurrentSection.Outline.AbsoluteSize.Y + Page.BottomOffset
+                                end
+                            end)
+                        end)
+
+                        UserInputService.InputEnded:Connect(function(Input)
+                            if Input.UserInputType ~= Enum.UserInputType.MouseButton1 or not Dragging then return end
+                            Dragging = false
+
+                            if DragConnection then
+                                DragConnection:Disconnect()
+                                DragConnection = nil
+                            end
+
+                            Section.Outline.BorderColor3 = NewRGB(12, 12, 12)
+                            Page:UpdateSectionSizes()
+                            OriginalSide = Section.Side
+                        end)
+                    end
+
+                    -- Connections
+                    do
+                        local ContentHolder = Section.ContentHolder
+                        GetPropertyChangedSignal(ContentHolder, "CanvasPosition"):Connect(function()
+                            Section.ArrowUp.ImageTransparency = (ContentHolder.CanvasPosition.Y - 12) <= 0 and 1 or 0
+                            Section.ArrowDown.ImageTransparency = (ContentHolder.AbsoluteCanvasSize.Y - (ContentHolder.CanvasPosition.Y + 10) >= ContentHolder.AbsoluteWindowSize.Y) and 0 or 1
+                        end)
+                    end
+
+                    SectionsContainer[Side][#SectionsContainer[Side] + 1] = Section
+
+                    Page:UpdateSectionSizes()
+
+                    return Section
+                end
+
+                function Page:UpdateSectionSizes()
+                    local function Update(Sections) -- TODO: Do something with the general section updating system
+                        for Side = 1, 2 do
+                            local SideSections = Sections[Side]
+                            local SideSectionsIndex = #SideSections
+                            if SideSectionsIndex == 0 then continue end
+
+                            local Top = Page.TopOffset
+                            local Bottom = Page.BottomOffset
+                            local Padding = Page.Padding
+                            local AvailableHeight = Page.ContentHolder.AbsoluteSize.Y - Top - Bottom - Padding * (SideSectionsIndex - 1)
+                            local AvailableWidth = Floor(Page.ContentHolder.AbsoluteSize.X + 0.5)
+
+                            local TotalLength = 0
+                            for i = 1, SideSectionsIndex do
+                                TotalLength = TotalLength + SideSections[i].Length
+                            end
+
+                            local Offset = Top
+                            local Remaining = AvailableHeight
+
+                            for i = 1, SideSectionsIndex do
+                                local Section = SideSections[i]
+                                local Height
+                                if i == SideSectionsIndex then
+                                    Height = Remaining
+                                else
+                                    Height = Floor(Section.Length / TotalLength * AvailableHeight + 0.5)
+                                    Remaining = Remaining - Height
+                                end
+
+                                Section.Outline.Position = NewUDim2(0, Side == 1 and 20 or AvailableWidth * 0.5 + 11, 0, Offset)
+                                Section.Outline.Size = NewUDim2(0, AvailableWidth * 0.5 - 30, 0, Height)
+                                Offset = Offset + Height + Padding
+
+                                Section:UpdateScroll()
+                            end
+                        end
+                    end
+
+                    if Page.Categories then
+                        for i = 1, #Page.Categories do
+                            Update(Page.Categories[i].Sections)
+                        end
+                    else
+                        Update(Page.Sections)
+                    end
+                end
+            end
+
+            -- Connections
+            do
+                Page.Background.MouseEnter:Connect(function()
+                    Page.Image.ImageColor3 = Page.IsOpen and NewRGB(210, 210, 210) or NewRGB(167, 167, 167)
+                end)
+
+                Page.Background.MouseLeave:Connect(function()
+                    Page.Image.ImageColor3 = Page.IsOpen and NewRGB(210, 210, 210) or NewRGB(90, 90, 90)
+                end)
+
+                Page.Background.MouseButton1Down:Connect(function()
+                    Page:Open()
+                end)
+            end
+
+            if Open then
+                Page:Open()
+            end
+
+            Window.PagesIndex += 1
+            Window.Pages[Window.PagesIndex] = Page
+        end
+
+        function Window:Open()
+            if self.IsOpen then
+                return
+            end
+
+            self.Outline.Visible = true
+            self.IsOpen = true
+        end
+
+        function Window:Close()
+            if not self.IsOpen then
+                return
+            end
+
+            if Menu.CurrentContent then
+                Menu.CurrentContent:Close()
+            end
+
+            self.Outline.Visible = false
+            self.IsOpen = false
+        end
+    end
+
+
+    -- Toggle Class
+    do
+        function Toggle.new(Configuration, Parameters)
+            -- Configuration
+            assert(typeof(Configuration) == "table", "Toggle.new - Configuration missing! Table expected\n" .. Traceback())
+            assert(typeof(Configuration.ContentHolder) == "Instance", "Toggle.new - Invalid ContentHolder type! Instance expected\n" .. Traceback())
+            assert(typeof(Configuration.Offset) == "table", "Toggle.new - Invalid Offset type! Table expected\n" .. Traceback())
+            assert(typeof(Configuration.ZIndex) == "number", "Toggle.new - Invalid ZIndex type! Number expected\n" .. Traceback())
+
+            -- Parameters
+            local Parameters = Parameters or {}
+            local Name = Parameters.Name or "New Toggle"
+            local Value = Parameters.Value or false
+            local Risky = Parameters.Risky or false
+            local Callback = Parameters.Callback or function() end
+
+            local Self = {
+                Class = "Toggle",
+                NoSave = Parameters.NoSave or false,
+
+                Name = Name,
+                Value = Value,
+                Risky = Risky,
+                Callback = Callback,
+
+                Height = 18,
+                Axis = 0, -- For colorpickers/hotkeys
+
+                ZIndex = Configuration.ZIndex,
+            } setmetatable(Self, Toggle)
+
+
+            -- Rendering
+            do
+                local ZIndex = Self.ZIndex
+
+                local Framework = Draw:TextButton({
+                    Parent = Configuration.ContentHolder,
+                    Position = NewUDim2(0, Configuration.Offset[1], 0, Configuration.Offset[2]),
+                    Size = NewUDim2(1, 0, 0, 8),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    Text = "",
+                    ZIndex = ZIndex,
+                    Visible = true
+                }) ZIndex += 1
+
+                local Checkbox = Draw:ImageLabel({
+                    Parent = Framework,
+                    Position = NewUDim2(0, 19, 0, 1),
+                    Size = NewUDim2(0, 6, 0, 6),
+                    BackgroundColor3 = NewRGB(77, 77, 77),
+                    BorderColor3 = NewRGB(12, 12, 12),
+                    Image = Assets["Checkbox Gradient"],
+                    Visible = true,
+                    ZIndex = ZIndex
+                }) ZIndex += 1
+
+                local Title = Draw:TextLabel({
+                    Parent = Checkbox,
+                    Position = NewUDim2(0, 21, 0, -1),
+                    Size = NewUDim2(1, 0, 1, 0),
+                    Text = Self.Name,
+                    TextColor3 = Self.Risky and Theme["Risky"] or NewRGB(212, 212, 212),
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    ZIndex = ZIndex,
+                    Visible = true
+                }) ZIndex += 1
+
+                Self.Framework = Framework
+                Self.Checkbox = Checkbox
+                Self.Title = Title
+
+                Self.ZIndex = ZIndex
+            end
+
+            
+            -- Connections
+            do
+                Self.Framework.MouseButton1Down:Connect(function()
+                    Self:SetValue(not Self.Value)
+                end)
+
+                Self.Framework.MouseEnter:Connect(function()
+                    Self.Checkbox.BackgroundColor3 = Self.Value and Theme["Accent"] or NewRGB(85, 85, 85)
+                end)
+
+                Self.Framework.MouseLeave:Connect(function()
+                    Self.Checkbox.BackgroundColor3 = Self.Value and Theme["Accent"] or NewRGB(77, 77, 77)
+                end)
+            end
+
+            Self:SetValue(Self.Value, true)
+
+            return Self
+        end
+
+        function Toggle:SetValue(Value, NoCallback)
+            local Toggle = self
+
+            Toggle.Value = Value
+            Toggle.Checkbox.BackgroundColor3 = Value and Theme["Accent"] or NewRGB(77, 77, 77)
+            Colors[Toggle.Checkbox] = Value and {{"Accent", "BackgroundColor3"}} or nil
+
+            if NoCallback then return end
+            Toggle.Callback(Value)
+        end
+
+        function Toggle:CreateColorpicker(Parameters)
+            local Toggle = self
+
+            local Element = Colorpicker.new({
+                ContentHolder = Toggle.Framework,
+                Position = NewUDim2(1, -34 + Toggle.Axis, 0, 0),
+                ZIndex = Toggle.ZIndex
+            }, Parameters)
+
+            Toggle.Axis = Toggle.Axis - 19
+
+            Menu:RegisterFlag(Element, Parameters and Parameters.Flag)
+
+            return Element
+        end
+
+        function Toggle:CreateHotkey(Parameters)
+            local Toggle = self
+
+            local Element = Hotkey.new({
+                ContentHolder = Toggle.Framework,
+                Position = NewUDim2(1, -34 + Toggle.Axis, 0, 0),
+                ZIndex = Toggle.ZIndex
+            }, Parameters)
+
+            Toggle.Axis = Toggle.Axis - 19
+
+            Menu:RegisterFlag(Element, Parameters and Parameters.Flag)
+
+            return Element
+        end
+    end
+
+
+    -- Slider Class
+    do
+        function Slider.new(Configuration, Parameters)
+            -- Configuration
+            assert(typeof(Configuration) == "table", "Slider.new - Configuration missing! Table expected\n" .. Traceback())
+            assert(typeof(Configuration.ContentHolder) == "Instance", "Slider.new - Invalid ContentHolder type! Instance expected\n" .. Traceback())
+            assert(typeof(Configuration.Offset) == "table", "Slider.new - Invalid Offset type! Table expected\n" .. Traceback())
+            assert(typeof(Configuration.ZIndex) == "number", "Slider.new - Invalid ZIndex type! Number expected\n" .. Traceback())
+
+            -- Parameters
+            local Parameters = Parameters or {}
+            local Name = Parameters.Name or nil
+            local Value = Parameters.Value or 50
+            local Minimum = Parameters.Minimum or 0
+            local Maximum = Parameters.Maximum or 100
+            local Decimals = Parameters.Decimals or 1
+            local Suffix = Parameters.Suffix or ""
+            local Custom = Parameters.Custom or nil
+            local Callback = Parameters.Callback or function() end
+
+            Value = Clamp(Value, Minimum, Maximum)
+            Decimals = 1 / Decimals
+
+            local Self = {
+                Class = "Slider",
+                NoSave = Parameters.NoSave or false,
+
+                Name = Name,
+                Named = Name ~= nil,
+                Value = Value,
+                Minimum = Minimum,
+                Maximum = Maximum,
+                Decimals = Decimals,
+                Suffix = Suffix,
+                Custom = Custom,
+                Callback = Callback,
+
+                Height = Name ~= nil and 30 or 18,
+                Hidden = false,
+
+                ZIndex = Configuration.ZIndex,
+            } setmetatable(Self, Slider)
+
+            -- Rendering
+            do
+                local ZIndex = Self.ZIndex
+
+                local Framework = Draw:Frame({
+                    Parent = Configuration.ContentHolder,
+                    Position = NewUDim2(0, Configuration.Offset[1], 0, Configuration.Offset[2]),
+                    Size = NewUDim2(1, 0, 0, Self.Named and 20 or 11),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    ZIndex = ZIndex,
+                    Visible = true
+                }) ZIndex += 1
+
+                if Self.Named then
+                    local Title = Draw:TextLabel({
+                        Parent = Framework,
+                        Position = NewUDim2(0, 38, 0, 2),
+                        Size = NewUDim2(0, 1, 0, 1),
+                        Text = Self.Name,
+                        TextColor3 = NewRGB(212, 212, 212),
+                        TextXAlignment = Enum.TextXAlignment.Left,
+                        ZIndex = ZIndex,
+                        Visible = true
+                    }) ZIndex += 1
+
+                    Self.Title = Title
+                end
+
+                local Outline = Draw:ImageButton({
+                    Parent = Framework,
+                    Position = NewUDim2(0, 39, 0, Self.Named and 14 or 1),
+                    Size = NewUDim2(1, -91, 0, 5),
+                    BackgroundColor3 = NewRGB(70, 70, 70),
+                    BorderColor3 = NewRGB(12, 12, 12),
+                    Image = Assets["Skeet Gradient Down"],
+                    ImageTransparency = 0.1,
+                    ZIndex = ZIndex,
+                    Visible = true
+                }) ZIndex += 1
+
+                local Inline = Draw:ImageButton({
+                    Parent = Outline,
+                    Position = NewUDim2(0, 0, 0, 0),
+                    Size = NewUDim2(0, (Outline.AbsoluteSize.X / (Self.Maximum - Self.Minimum)) * (Self.Value - Self.Minimum), 1, 0),
+                    BackgroundColor3 = Theme["Accent"],
+                    BorderSizePixel = 0,
+                    Image = Assets["Skeet Gradient"],
+                    ImageTransparency = 0.1,
+                    Interactable = false,
+                    ZIndex = ZIndex,
+                    Visible = true
+                }) ZIndex += 1
+
+                local Minus = Draw:ImageButton({
+                    Parent = Outline,
+                    Position = NewUDim2(0, -6, 0, 2),
+                    Size = NewUDim2(0, 3, 0, 1),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    Image = Assets["Minus"],
+                    ImageColor3 = NewRGB(100, 100, 100),
+                    ZIndex = ZIndex,
+                    Visible = true
+                }) ZIndex += 1
+
+                local Plus = Draw:ImageButton({
+                    Parent = Outline,
+                    Position = NewUDim2(1, 5, 0, 1),
+                    Size = NewUDim2(0, 3, 0, 3),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    Image = Assets["Plus"],
+                    ImageColor3 = NewRGB(100, 100, 100),
+                    ZIndex = ZIndex,
+                    Visible = true
+                }) ZIndex += 1
+
+                local TextValue = Draw:TextLabel({
+                    Parent = Inline,
+                    Position = NewUDim2(1, 0, 0, 4),
+                    Size = NewUDim2(0, 1, 0, 1),
+                    Text = Self.Value,
+                    FontFace = Fonts[2][1],
+                    TextSize = Fonts[2][2],
+                    TextColor3 = Fonts[2][3],
+                    ZIndex = ZIndex,
+                    Visible = true
+                }) ZIndex += 1
+
+                Draw:UIStroke({
+                    Parent = TextValue,
+                    Color = Black,
+                    Transparency = 0.2,
+                    Enabled = true
+                })
+
+                Self.Framework = Framework
+                Self.Outline = Outline
+                Self.Inline = Inline
+                Self.Plus = Plus
+                Self.Minus = Minus
+                Self.TextValue = TextValue
+
+                Colors[Inline] = {{"Accent", "BackgroundColor3"}}
+
+                Self.ZIndex = ZIndex
+            end
+
+
+            -- Connections
+            do
+                local Outline = Self.Outline
+
+                local MoveConnection, ReleaseConnection = nil, nil
+                Outline.MouseButton1Down:Connect(function()
+                    Self:HandleInput()
+                    
+                    MoveConnection = Mouse.Move:Connect(function()
+                        Self:HandleInput()
+                    end)
+
+                    ReleaseConnection = UserInputService.InputEnded:Connect(function(Input)
+                        if Input.UserInputType == Enum.UserInputType.MouseButton1 then 
+                            Self:HandleInput()
+
+                            MoveConnection:Disconnect(); MoveConnection = nil
+                            ReleaseConnection:Disconnect(); ReleaseConnection = nil
+                        end
+                    end)
+                end)
+
+                Self.Minus.MouseButton1Down:Connect(function()
+                    Self:SetValue(Self.Value - 1 / Self.Decimals)
+                end)
+
+                Self.Plus.MouseButton1Down:Connect(function()
+                    Self:SetValue(Self.Value + 1 / Self.Decimals)
+                end)
+
+                Outline.MouseEnter:Connect(function()
+                    Outline.BackgroundColor3 = NewRGB(82, 82, 82)
+                end)
+
+                Outline.MouseLeave:Connect(function()
+                    Outline.BackgroundColor3 = NewRGB(70, 70, 70)
+                end)
+            end
+
+            Self:SetValue(Self.Value, true)
+
+            return Self
+        end
+
+        function Slider:SetValue(Value, NoCallback)
+            local Slider = self
+            local Decimals = Slider.Decimals
+            local Custom = Slider.Custom
+
+            Value = Clamp(Floor(Value * Decimals + 0.5) / Decimals, Slider.Minimum, Slider.Maximum)
+
+            Slider.Value = Value
+            Slider.Plus.Visible = Value < Slider.Maximum
+            Slider.Minus.Visible = Value > Slider.Minimum
+            Slider.Inline.Size = NewUDim2((Value - Slider.Minimum) / (Slider.Maximum - Slider.Minimum), 0, 1, 0)
+
+            Slider.TextValue.Text = (Custom and Value == Custom[2]) and Custom[1] or (Value .. Slider.Suffix)
+
+            if NoCallback then return end
+            Slider.Callback(Value)
+        end
+
+        function Slider:HandleInput()
+            local Slider = self
+            local SizeX = Slider.Outline.AbsoluteSize.X
+            local Decimals, Minimum, Maximum = Slider.Decimals, Slider.Minimum, Slider.Maximum
+
+            Slider:SetValue(Clamp(Floor((Minimum + (Maximum - Minimum) * Clamp(Mouse.X - Slider.Inline.AbsolutePosition.X, 0, SizeX) / SizeX) * Decimals + 0.5) / Decimals, Minimum, Maximum))
+        end
+    end
+
+
+    -- Combobox Class
+    do
+        function Combobox.new(Configuration, Parameters)
+            -- Configuration
+            assert(typeof(Configuration) == "table", "Combobox.new - Configuration missing! Table expected\n" .. Traceback())
+            assert(typeof(Configuration.ContentHolder) == "Instance", "Combobox.new - Invalid ContentHolder type! Instance expected\n" .. Traceback())
+            assert(typeof(Configuration.Offset) == "table", "Combobox.new - Invalid Offset type! Table expected\n" .. Traceback())
+            assert(typeof(Configuration.ZIndex) == "number", "Combobox.new - Invalid ZIndex type! Number expected\n" .. Traceback())
+
+            -- Parameters
+            local Parameters = Parameters or {}
+            local Name = Parameters.Name or nil
+            local Options = Parameters.Options or {"option 1", "option 2", "option 3", "option 4", "option 5"}
+            local Value = Parameters.Value or {Options[1]}
+            local Minimum = Parameters.Minimum or 0
+            local Maximum = Parameters.Maximum or 10
+            local Callback = Parameters.Callback or function() end
+
+            local Self = {
+                Class = "Combobox",
+                NoSave = Parameters.NoSave or false,
+
+                Name = Name,
+                Named = Name ~= nil,
+                Value = Value,
+                Minimum = Minimum,
+                Maximum = Maximum,
+                Options = Options,
+                Callback = Callback,
+
+                Height = Name ~= nil and 40 or 29,
+
+                IsOpen = false,
+                OpenContent = {},
+
+                ZIndex = Configuration.ZIndex,
+            } setmetatable(Self, Combobox)
+
+
+            -- Rendering
+            do
+                local ZIndex = Self.ZIndex
+
+                local Framework = Draw:Frame({
+                    Parent = Configuration.ContentHolder,
+                    Position = NewUDim2(0, Configuration.Offset[1], 0, Configuration.Offset[2]),
+                    Size = NewUDim2(1, 0, 0, Self.Named and 31 or 20),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    ZIndex = ZIndex,
+                    Visible = true
+                }) ZIndex += 1
+
+                if Self.Named then
+                    local Title = Draw:TextLabel({
+                        Parent = Framework,
+                        Position = NewUDim2(0, 38, 0, 2),
+                        Size = NewUDim2(0, 1, 0, 1),
+                        Text = Self.Name,
+                        TextColor3 = NewRGB(212, 212, 212),
+                        TextXAlignment = Enum.TextXAlignment.Left,
+                        ZIndex = ZIndex,
+                        Visible = true
+                    }) ZIndex += 1
+
+                    Self.Title = Title
+                end
+
+                local Outline = Draw:ImageButton({
+                    Parent = Framework,
+                    Position = NewUDim2(0, 39, 0, Self.Named and 12 or 1),
+                    Size = NewUDim2(1, -97, 0, 18),
+                    BackgroundColor3 = NewRGB(36, 36, 36),
+                    BorderColor3 = NewRGB(12, 12, 12),
+                    Image = Assets["Skeet Gradient Down"],
+                    ImageTransparency = 0.55,
+                    ZIndex = ZIndex,
+                    Visible = true
+                }) ZIndex += 1
+
+                local TextValue = Draw:TextLabel({
+                    Parent = Outline,
+                    Position = NewUDim2(0, 6, 0, 0),
+                    Size = NewUDim2(1, -12, 1, 0),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    Text = "-",
+                    TextXAlignment = "Left",
+                    ZIndex = ZIndex,
+                    Visible = true
+                }) ZIndex += 1
+
+                local Icon = Draw:ImageLabel({
+                    Parent = Outline,
+                    Position = NewUDim2(1, -11, 0, 6),
+                    Size = NewUDim2(0, 5, 0, 4),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    Image = Assets["Arrow Down"],
+                    ImageColor3 = NewRGB(151, 151, 151),
+                    ZIndex = ZIndex,
+                    Visible = true
+                }) ZIndex += 1
+
+                Self.Outline = Outline
+                Self.TextValue = TextValue
+
+                Self.ZIndex = ZIndex
+            end
+
+
+            -- Connections
+            do
+                Self.Outline.MouseButton1Down:Connect(function()
+                    Self[Self.IsOpen and "Close" or "Open"](Self)
+                end)
+
+                Self.Outline.MouseEnter:Connect(function()
+                    Self.Outline.BackgroundColor3 = NewRGB(48, 48, 48)
+                end)
+
+                Self.Outline.MouseLeave:Connect(function()
+                    Self.Outline.BackgroundColor3 = NewRGB(36, 36, 36)
+                end)
+            end
+
+            Self:SetValue(Self.Value, true)
+
+            return Self
+        end
+
+        function Combobox:Open()
+            if Menu.CurrentContent then
+                Menu.CurrentContent:Close()
+            end
+
+            local Combobox = self
+            local OptionsIndex = #Combobox.Options
+
+            if OptionsIndex < 1 then
+                return
+            end
+
+            Menu.CurrentContent = Combobox
+            Combobox.IsOpen = true
+
+            local ZIndex = Combobox.ZIndex + 2000
+            local AbsolutePosition = Combobox.Outline.AbsolutePosition
+            local AbsoluteSize = Combobox.Outline.AbsoluteSize
+
+            local Framework = Draw:Frame({
+                Parent = Menu.Overlay,
+                Position = NewUDim2(0, AbsolutePosition.X, 0, AbsolutePosition.Y + AbsoluteSize.Y + 3 + GetGuiInset(GuiService).Y),
+                Size = NewUDim2(0, AbsoluteSize.X, 0, 20 * OptionsIndex),
+                BackgroundColor3 = NewRGB(35, 35, 35),
+                BorderColor3 = NewRGB(12, 12, 12),
+                ZIndex = ZIndex,
+                Visible = true
+            }) ZIndex += 1
+
+            Combobox.OpenContent.Texts = {}
+            Combobox.OpenContent.RepositionConnection = GetPropertyChangedSignal(Combobox.Outline, "AbsolutePosition"):Connect(function()
+                local AbsolutePosition = Combobox.Outline.AbsolutePosition
+                Framework.Position = NewUDim2(0, AbsolutePosition.X, 0, AbsolutePosition.Y + Combobox.Outline.AbsoluteSize.Y + 3 + GetGuiInset(GuiService).Y)
+            end)
+
+            for i = 1, OptionsIndex do
+                local Option = Combobox.Options[i]
+                local IsChosen = Find(Combobox.Value, Option) ~= nil
+                local FontSet = Fonts[IsChosen and 2 or 1]
+
+                local Button = Draw:TextButton({
+                    Parent = Framework,
+                    Position = NewUDim2(0, 0, 0, 20 * (i - 1)),
+                    Size = NewUDim2(1, 0, 0, 20),
+                    BackgroundColor3 = NewRGB(35, 35, 35),
+                    BorderSizePixel = 0,
+                    Text = "",
+                    ZIndex = ZIndex,
+                    Visible = true
+                })
+
+                local Text = Draw:TextLabel({
+                    Parent = Button,
+                    Position = NewUDim2(0, 6, 0, 0),
+                    Size = NewUDim2(1, -4, 1, 0),
+                    Text = Option,
+                    FontFace = FontSet[1],
+                    TextSize = FontSet[2],
+                    TextColor3 = IsChosen and Theme["Accent"] or FontSet[3],
+                    TextXAlignment = "Left",
+                    ZIndex = ZIndex,
+                    Visible = true
+                })
+
+                Button.MouseButton1Down:Connect(function()
+                    local Found = Find(Combobox.Value, Option)
+
+                    if Found then
+                        local ValuesIndex = #Combobox.Value
+
+                        if ValuesIndex > Combobox.Minimum then
+                            Remove(Combobox.Value, Found)
+                            ValuesIndex -= 1
+                        end
+
+                        if ValuesIndex == 0 then
+                            Combobox.TextValue.Text = "-"
+                        end
+                    else
+                        if #Combobox.Value < Combobox.Maximum then
+                            Combobox.Value[#Combobox.Value + 1] = Option
+                        end
+                    end
+
+                    for k = 1, OptionsIndex do -- TODO: Switch this.
+                        local OpenText = Combobox.OpenContent.Texts[k]
+                        local OpenOption = OpenText.Text
+                        local IsChosenInner = Find(Combobox.Value, OpenOption) ~= nil
+                        local FontSetInner = Fonts[IsChosenInner and 2 or 1]
+
+                        OpenText.FontFace = FontSetInner[1]
+                        OpenText.TextSize = FontSetInner[2]
+                        OpenText.TextColor3 = IsChosenInner and Theme["Accent"] or FontSetInner[3]
+                    end
+
+                    Combobox.TextValue.Text = Menu:TruncateText(Concat(Combobox.Value, ",  "), Fonts[2], Combobox.TextValue.AbsoluteSize.X - 6)
+                    Combobox.Callback(Combobox.Value)
+                end)
+
+                Button.MouseEnter:Connect(function()
+                    Button.BackgroundColor3 = NewRGB(25, 25, 25)
+                    
+                    local Font = Fonts[2]
+                    Text.FontFace = Font[1]
+                    Text.TextSize = Font[2]
+                end)
+
+                Button.MouseLeave:Connect(function()
+                    Button.BackgroundColor3 = NewRGB(35, 35, 35)
+
+                    local IsChosen = Find(Combobox.Value, Option) ~= nil
+                    local Font = Fonts[IsChosen and 2 or 1]
+                    Text.FontFace = Font[1]
+                    Text.TextSize = Font[2]
+                end)
+
+                Combobox.OpenContent.Texts[i] = Text
+            end
+
+            Combobox.OpenContent.Framework = Framework
+        end
+
+        function Combobox:Close()
+            local Combobox = self
+
+            if Combobox.IsOpen then
+                Combobox.IsOpen = false
+                Menu.CurrentContent = nil
+
+                Combobox.OpenContent.RepositionConnection:Disconnect()
+                Destroy(Combobox.OpenContent.Framework)
+
+                Combobox.OpenContent = {}
+            end
+        end
+
+        function Combobox:SetValue(Value, NoCallback)
+            local Combobox = self
+
+            Combobox.Value = Value
+            Combobox.TextValue.Text = Menu:TruncateText(Concat(Combobox.Value, ",  "), Fonts[2], Combobox.TextValue.AbsoluteSize.X - 6)
+
+            if NoCallback then return end
+            Combobox.Callback(Value)
+        end
+    end
+
+
+    -- Dropdown Class
+    do
+        function Dropdown.new(Configuration, Parameters)
+            -- Configuration
+            assert(typeof(Configuration) == "table", "Dropdown.new - Configuration missing! Table expected\n" .. Traceback())
+            assert(typeof(Configuration.ContentHolder) == "Instance", "Dropdown.new - Invalid ContentHolder type! Instance expected\n" .. Traceback())
+            assert(typeof(Configuration.Offset) == "table", "Dropdown.new - Invalid Offset type! Table expected\n" .. Traceback())
+            assert(typeof(Configuration.ZIndex) == "number", "Dropdown.new - Invalid ZIndex type! Number expected\n" .. Traceback())
+
+            -- Parameters
+            local Parameters = Parameters or {}
+            local Name = Parameters.Name or nil
+            local Options = Parameters.Options or {"option 1", "option 2", "option 3", "option 4", "option 5"}
+            local Value = Parameters.Value or Options[1]
+            local Callback = Parameters.Callback or function() end
+
+            local Self = {
+                Class = "Dropdown",
+                NoSave = Parameters.NoSave or false,
+
+                Name = Name,
+                Named = Name ~= nil,
+                Value = Value,
+                Options = Options,
+                Callback = Callback,
+
+                Height = Name ~= nil and 40 or 29,
+
+                IsOpen = false,
+                OpenContent = {},
+
+                ZIndex = Configuration.ZIndex,
+            } setmetatable(Self, Dropdown)
+
+
+            -- Rendering
+            do
+                local ZIndex = Self.ZIndex
+
+                local Framework = Draw:Frame({
+                    Parent = Configuration.ContentHolder,
+                    Position = NewUDim2(0, Configuration.Offset[1], 0, Configuration.Offset[2]),
+                    Size = NewUDim2(1, 0, 0, Self.Named and 31 or 20),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    ZIndex = ZIndex,
+                    Visible = true
+                }) ZIndex += 1
+
+                if Self.Named then
+                    local Title = Draw:TextLabel({
+                        Parent = Framework,
+                        Position = NewUDim2(0, 38, 0, 2),
+                        Size = NewUDim2(0, 1, 0, 1),
+                        Text = Self.Name,
+                        TextColor3 = NewRGB(212, 212, 212),
+                        TextXAlignment = Enum.TextXAlignment.Left,
+                        ZIndex = ZIndex,
+                        Visible = true
+                    }) ZIndex += 1
+
+                    Self.Title = Title
+                end
+
+                local Outline = Draw:ImageButton({
+                    Parent = Framework,
+                    Position = NewUDim2(0, 39, 0, Self.Named and 12 or 1),
+                    Size = NewUDim2(1, -97, 0, 18),
+                    BackgroundColor3 = NewRGB(36, 36, 36),
+                    BorderColor3 = NewRGB(12, 12, 12),
+                    Image = Assets["Skeet Gradient Down"],
+                    ImageTransparency = 0.55,
+                    ZIndex = ZIndex,
+                    Visible = true
+                }) ZIndex += 1
+
+                local TextValue = Draw:TextLabel({
+                    Parent = Outline,
+                    Position = NewUDim2(0, 6, 0, 0),
+                    Size = NewUDim2(1, -12, 1, 0),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    Text = "-",
+                    TextXAlignment = "Left",
+                    ZIndex = ZIndex,
+                    Visible = true
+                }) ZIndex += 1
+
+                local Icon = Draw:ImageLabel({
+                    Parent = Outline,
+                    Position = NewUDim2(1, -11, 0, 6),
+                    Size = NewUDim2(0, 5, 0, 4),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    Image = Assets["Arrow Down"],
+                    ImageColor3 = NewRGB(151, 151, 151),
+                    ZIndex = ZIndex,
+                    Visible = true
+                }) ZIndex += 1
+
+                Self.Outline = Outline
+                Self.TextValue = TextValue
+
+                Self.ZIndex = ZIndex
+            end
+
+
+            -- Connections
+            do
+                Self.Outline.MouseButton1Down:Connect(function()
+                    Self[Self.IsOpen and "Close" or "Open"](Self)
+                end)
+
+                Self.Outline.MouseEnter:Connect(function()
+                    Self.Outline.BackgroundColor3 = NewRGB(48, 48, 48)
+                end)
+
+                Self.Outline.MouseLeave:Connect(function()
+                    Self.Outline.BackgroundColor3 = NewRGB(36, 36, 36)
+                end)
+            end
+
+            Self:SetValue(Self.Value, true)
+
+            return Self
+        end
+
+        function Dropdown:Open()
+            if Menu.CurrentContent then
+                Menu.CurrentContent:Close()
+            end
+
+            local Dropdown = self
+            local OptionsIndex = #Dropdown.Options
+
+            if OptionsIndex < 1 then
+                return
+            end
+
+            Menu.CurrentContent = Dropdown
+            Dropdown.IsOpen = true
+
+            local ZIndex = Dropdown.ZIndex + 2000
+            local AbsolutePosition = Dropdown.Outline.AbsolutePosition
+            local AbsoluteSize = Dropdown.Outline.AbsoluteSize
+
+            local Framework = Draw:Frame({
+                Parent = Menu.Overlay,
+                Position = NewUDim2(0, AbsolutePosition.X, 0, AbsolutePosition.Y + AbsoluteSize.Y + 3 + GetGuiInset(GuiService).Y),
+                Size = NewUDim2(0, AbsoluteSize.X, 0, 20 * OptionsIndex),
+                BackgroundColor3 = NewRGB(35, 35, 35),
+                BorderColor3 = NewRGB(12, 12, 12),
+                ZIndex = ZIndex,
+                Visible = true
+            }) ZIndex += 1
+
+            Dropdown.OpenContent.RepositionConnection = GetPropertyChangedSignal(Dropdown.Outline, "AbsolutePosition"):Connect(function()
+                local AbsolutePosition = Dropdown.Outline.AbsolutePosition
+                Framework.Position = NewUDim2(0, AbsolutePosition.X, 0, AbsolutePosition.Y + Dropdown.Outline.AbsoluteSize.Y + 3 + GetGuiInset(GuiService).Y)
+            end)
+
+            for i = 1, OptionsIndex do
+                local Option = Dropdown.Options[i]
+
+                local IsChosen = Dropdown.Value == Option
+                local FontSet = Fonts[IsChosen and 2 or 1]
+
+                local Button = Draw:TextButton({
+                    Parent = Framework,
+                    Position = NewUDim2(0, 0, 0, 20 * (i - 1)),
+                    Size = NewUDim2(1, 0, 0, 20),
+                    BackgroundColor3 = NewRGB(35, 35, 35),
+                    BorderSizePixel = 0,
+                    Text = "",
+                    ZIndex = ZIndex,
+                    Visible = true
+                })
+
+                local Text = Draw:TextLabel({
+                    Parent = Button,
+                    Position = NewUDim2(0, 6, 0, 0),
+                    Size = NewUDim2(1, -4, 1, 0),
+                    Text = Option,
+                    FontFace = FontSet[1],
+                    TextSize = FontSet[2],
+                    TextColor3 = IsChosen and Theme["Accent"] or FontSet[3],
+                    TextXAlignment = "Left",
+                    ZIndex = ZIndex,
+                    Visible = true
+                })
+
+                Button.MouseButton1Down:Connect(function()
+                    local CurrentLabel = Dropdown.OpenContent.CurrentLabel
+                    if CurrentLabel then
+                        local Font = Fonts[1]
+                        CurrentLabel.FontFace = Font[1]
+                        CurrentLabel.TextSize = Font[2]
+                        CurrentLabel.TextColor3 = Font[3]
+                    end
+
+                    Dropdown.Value = Option
+
+                    local Font = Fonts[2]
+                    Text.FontFace = Font[1]
+                    Text.TextSize = Font[2]
+                    Text.TextColor3 = Font[3]
+
+                    Dropdown.OpenContent.CurrentLabel = Text
+                    Dropdown.TextValue.Text = Menu:TruncateText(Dropdown.Value, Fonts[2], Dropdown.TextValue.AbsoluteSize.X - 6)
+                    Dropdown.Callback(Dropdown.Value)
+
+                    Dropdown:Close()
+                end)
+
+                Button.MouseEnter:Connect(function()
+                    Button.BackgroundColor3 = NewRGB(25, 25, 25)
+                    
+                    local FontSet = Fonts[2]
+                    Text.FontFace = FontSet[1]
+                    Text.TextSize = FontSet[2]
+                end)
+
+                Button.MouseLeave:Connect(function()
+                    Button.BackgroundColor3 = NewRGB(35, 35, 35)
+
+                    local FontSet = Fonts[Dropdown.Value == Option and 2 or 1]
+                    Text.FontFace = FontSet[1]
+                    Text.TextSize = FontSet[2]
+                end)
+            end
+
+            Dropdown.OpenContent.Framework = Framework
+        end
+
+        function Dropdown:Close()
+            local Dropdown = self
+
+            if Dropdown.IsOpen then
+                Dropdown.IsOpen = false
+                Menu.CurrentContent = nil
+
+                Dropdown.OpenContent.RepositionConnection:Disconnect()
+                Destroy(Dropdown.OpenContent.Framework)
+
+                Dropdown.OpenContent = {}
+            end
+        end
+
+        function Dropdown:SetValue(Value, NoCallback)
+            local Dropdown = self
+
+            Dropdown.Value = Value
+            Dropdown.TextValue.Text = Menu:TruncateText(Dropdown.Value, Fonts[2], Dropdown.TextValue.AbsoluteSize.X - 6)
+
+            if NoCallback then return end
+            Dropdown.Callback(Value)
+        end
+    end
+
+    -- Button Class
+    do
+        function Button.new(Configuration, Parameters)
+            -- Configuration
+            assert(typeof(Configuration) == "table", "Button.new - Configuration missing! Table expected\n" .. Traceback())
+            assert(typeof(Configuration.ContentHolder) == "Instance", "Button.new - Invalid ContentHolder type! Instance expected\n" .. Traceback())
+            assert(typeof(Configuration.Offset) == "table", "Button.new - Invalid Offset type! Table expected\n" .. Traceback())
+            assert(typeof(Configuration.ZIndex) == "number", "Button.new - Invalid ZIndex type! Number expected\n" .. Traceback())
+
+            local Parameters = Parameters or {}
+            local Name = Parameters.Name or "New Button"
+            local Confirm = Parameters.Confirm or false
+            local Callback = Parameters.Callback or function() end
+
+            local Self = {
+                Class = "Button",
+                NoSave = Parameters.NoSave or false,
+
+                Name = Name,
+                Confirm = Confirm,
+                Callback = Callback,
+
+                Height = 33,
+                Confirmable = false,
+
+                ZIndex = Configuration.ZIndex
+            } setmetatable(Self, Button)
+
+
+            -- Rendering
+            do
+                local ZIndex = Self.ZIndex
+
+                local Framework = Draw:Frame({
+                    Parent = Configuration.ContentHolder,
+                    Position = NewUDim2(0, Configuration.Offset[1], 0, Configuration.Offset[2]),
+                    Size = NewUDim2(1, 0, 0, 25),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    ZIndex = ZIndex,
+                    Visible = true
+                }) ZIndex += 1
+
+                local Outline = Draw:Frame({
+                    Parent = Framework,
+                    Position = NewUDim2(0, 39, 0, 1),
+                    Size = NewUDim2(1, -97, 0, 23),
+                    BackgroundColor3 = NewRGB(50, 50, 50),
+                    BorderColor3 = NewRGB(12, 12, 12),
+                    ZIndex = ZIndex,
+                    Visible = true
+                }) ZIndex += 1
+
+                local Inline = Draw:ImageButton({
+                    Parent = Outline,
+                    Position = NewUDim2(0, 1, 0, 1),
+                    Size = NewUDim2(1, -2, 1, -2),
+                    BackgroundColor3 = NewRGB(34, 34, 34),
+                    BorderSizePixel = 0,
+                    Image = Assets["Skeet Gradient"],
+                    ImageTransparency = 0.6,
+                    ZIndex = ZIndex,
+                    Visible = true
+                }) ZIndex += 1
+
+                local Title = Draw:TextLabel({
+                    Parent = Inline,
+                    Position = NewUDim2(0, 1, 0, 0),
+                    Size = NewUDim2(1, 0, 1, 0),
+                    Text = Name,
+                    FontFace = Fonts[2][1], 
+                    TextSize = Fonts[2][2],
+                    TextColor3 = Fonts[2][3],
+                    ZIndex = ZIndex,
+                    Visible = true
+                }) ZIndex += 1
+
+                local TitleShadow = Draw:TextLabel({
+                    Parent = Title,
+                    Position = NewUDim2(0, 1, 0, 1),
+                    Size = NewUDim2(1, 0, 1, 0),
+                    Text = Name,
+                    FontFace = Fonts[2][1],
+                    TextSize = Fonts[2][2],
+                    TextColor3 = NewRGB(12, 12, 12),
+                    ZIndex = ZIndex - 2,
+                    Visible = true
+                }) ZIndex += 1
+
+                Self.Outline = Outline
+                Self.Inline = Inline
+                Self.Title = Title
+                Self.TitleShadow = TitleShadow
+
+                Self.ZIndex = ZIndex
+            end
+
+            -- Connections
+            do
+                Self.Inline.MouseButton1Down:Connect(function()
+                    if Self.Confirm then
+                        if Self.Confirmable then
+                            Self.Callback()
+
+                            Cancel(Self.Task)
+
+                            Self.Confirmable = false
+                            Self.Title.Text = Self.Name
+                            Self.TitleShadow.Text = Self.Name
+                            Self.Inline.BackgroundColor3 = NewRGB(34, 34, 34)
+                        else
+                            Self.Task = Spawn(function()
+                                local Text = "Confirm?"
+                                Self.Title.Text = Text
+                                Self.TitleShadow.Text = Text
+                                Self.Inline.BackgroundColor3 = NewRGB(24, 24, 24)
+
+                                Self.Confirmable = true
+                                Wait(3)
+
+                                Self.Confirmable = false
+                                Self.Title.Text = Self.Name
+                                Self.TitleShadow.Text = Self.Name
+                                Self.Inline.BackgroundColor3 = NewRGB(34, 34, 34)
+                            end)
+                        end
+                    else
+                        Self.Inline.BackgroundColor3 = NewRGB(24, 24, 24)
+                        Self.Callback()
+                        Wait(0.1)
+                        Self.Inline.BackgroundColor3 = NewRGB(34, 34, 34)
+                    end
+                end)
+
+                Self.Inline.MouseEnter:Connect(function()
+                    Self.Inline.BackgroundColor3 = Self.Confirmable and NewRGB(24, 24, 24) or NewRGB(46, 46, 46)
+                end)
+
+                Self.Inline.MouseLeave:Connect(function()
+                    Self.Inline.BackgroundColor3 = Self.Confirmable and NewRGB(24, 24, 24) or NewRGB(34, 34, 34)
+                end)
+            end
+
+            return Self
+        end
+    end
+
+
+    -- Label Class
+    do
+        function Label.new(Configuration, Parameters)
+            -- Configuration
+            assert(typeof(Configuration) == "table", "Label.new - Configuration missing! Table expected\n" .. Traceback())
+            assert(typeof(Configuration.ContentHolder) == "Instance", "Label.new - Invalid ContentHolder type! Instance expected\n" .. Traceback())
+            assert(typeof(Configuration.Offset) == "table", "Label.new - Invalid Offset type! Table expected\n" .. Traceback())
+            assert(typeof(Configuration.ZIndex) == "number", "Label.new - Invalid ZIndex type! Number expected\n" .. Traceback())
+
+            local Parameters = Parameters or {}
+            local Text = Parameters.Text or Parameters.Name or "Label Text"
+
+            local Self = {
+                Class = "Label",
+                NoSave = Parameters.NoSave or false,
+
+                Value = Text,
+
+                Height = 0,
+                Confirmable = false,
+
+                ZIndex = Configuration.ZIndex
+            } setmetatable(Self, Label)
+
+
+            -- Rendering
+            do
+                local Text = Draw:TextLabel({
+                    Parent = Configuration.ContentHolder,
+                    Position = NewUDim2(0, Configuration.Offset[1], 0, Configuration.Offset[2]),
+                    Size = NewUDim2(1, 0, 0, Menu:GetTextBounds(Self.Value, Fonts[1]).Y),
+                    Text = Self.Value,
+                    TextXAlignment = "Left",
+                    ZIndex = Self.ZIndex,
+                    Visible = true
+                }) Self.ZIndex += 1
+
+                Self.Text = Text
+            end
+
+            Self.Height = Self.Height + Self.Text.AbsoluteSize.Y + 7
+
+            return Self
+        end
+    end
+
+
+    -- Colorpicker Class
+    do
+        function Colorpicker.new(Configuration, Parameters)
+            -- Configuration
+            assert(typeof(Configuration) == "table", "Colorpicker.new - Configuration missing! Table expected\n" .. Traceback())
+            assert(typeof(Configuration.ContentHolder) == "Instance", "Colorpicker.new - Invalid ContentHolder type! Instance expected\n" .. Traceback())
+            assert(typeof(Configuration.Position) == "UDim2", "Colorpicker.new - Invalid Position type! Table expected\n" .. Traceback())
+            assert(typeof(Configuration.ZIndex) == "number", "Colorpicker.new - Invalid ZIndex type! Number expected\n" .. Traceback())
+
+            local Parameters = Parameters or {}
+            local Color = Parameters.Color or White
+            local Transparency = Parameters.Transparency or 0
+            local Callback = Parameters.Callback or function() end
+
+            local Hue, Saturation, Vibrance = ToHSV(Color)
+
+            local Self = {
+                Class = "Colorpicker",
+                NoSave = Parameters.NoSave or false,
+
+                Color = Color,
+                Transparency = Transparency,
+                Hue = Hue,
+                Saturation = Saturation,
+                Vibrance = Vibrance,
+
+                IsOpen = false,
+                OpenContent = {},
+
+                Callback = Callback,
+                ZIndex = Configuration.ZIndex
+            } setmetatable(Self, Colorpicker)
+
+
+            -- Rendering
+            do
+                local ZIndex = Self.ZIndex
+
+                local Framework = Draw:ImageButton({
+                    Parent = Configuration.ContentHolder,
+                    Position = Configuration.Position,
+                    Size = NewUDim2(0, 15, 0, 7),
+                    BackgroundColor3 = Self.Color,
+                    BorderColor3 = NewRGB(12, 12, 12),
+                    Image = Assets["Skeet Gradient"],
+                    ImageTransparency = 0.5,
+                    ZIndex = ZIndex,
+                    Visible = true
+                }) ZIndex += 1
+
+                Self.Framework = Framework
+
+                Self.ZIndex = ZIndex
+            end
+
+            Self.Framework.MouseButton1Down:Connect(function()
+                Self[Self.IsOpen and "Close" or "Open"](Self)
+            end)
+
+            return Self
+        end
+
+        function Colorpicker:Open()
+            local Colorpicker = self
+
+            if Menu.CurrentContent then
+                Menu.CurrentContent:Close()
+            end
+
+            Menu.CurrentContent = Colorpicker
+            Colorpicker.IsOpen = true
+
+            local ZIndex = Colorpicker.ZIndex + 2000
+
+            local AbsolutePosition = Colorpicker.Framework.AbsolutePosition
+            local AbsoluteSize = Colorpicker.Framework.AbsoluteSize
+
+            local Framework = Draw:Frame({
+                Parent = Menu.Overlay,
+                Position = NewUDim2(0, AbsolutePosition.X + AbsoluteSize.X + 2, 0, AbsolutePosition.Y + AbsoluteSize.Y + 2 + GetGuiInset(GuiService).Y),
+                Size = NewUDim2(0, 236, 0, 236),
+                BackgroundColor3 = NewRGB(40, 40, 40),
+                BorderColor3 = NewRGB(60, 60, 60),
+                BorderMode = Enum.BorderMode.Inset,
+                ZIndex = ZIndex,
+                Visible = true
+            }) ZIndex += 1
+
+            Draw:UIStroke({
+                Parent = Framework,
+                Color = NewRGB(12, 12, 12),
+                Enabled = true
+            })
+
+            Colorpicker.RepositionConnection = GetPropertyChangedSignal(Colorpicker.Framework, "AbsolutePosition"):Connect(function()
+                local AbsolutePosition = Colorpicker.Framework.AbsolutePosition
+                local AbsoluteSize = Colorpicker.Framework.AbsoluteSize
+                Framework.Position = NewUDim2(0, AbsolutePosition.X + AbsoluteSize.X + 2, 0, AbsolutePosition.Y + AbsoluteSize.Y + 2 + GetGuiInset(GuiService).Y)
+            end)
+
+            local SaturationGradient
+
+            -- Valsat
+            do
+                local ValsatFramework = Draw:TextButton({
+                    Parent = Framework,
+                    Position = NewUDim2(0, 5, 0, 5),
+                    Size = NewUDim2(1, -28, 1, -26),
+                    BackgroundColor3 = White,
+                    BorderColor3 = NewRGB(12, 12, 12),
+                    Text = "",
+                    ZIndex = ZIndex,
+                    Visible = true
+                }) ZIndex += 1
+
+                SaturationGradient = Draw:Frame({
+                    Parent = ValsatFramework,
+                    Position = NewUDim2(0, 0, 0, 0),
+                    Size = NewUDim2(1, 0, 1, 0),
+                    BackgroundColor3 = NewRGB(
+                        NewHSV(Colorpicker.Hue, 1, 1).R * 255,
+                        NewHSV(Colorpicker.Hue, 1, 1).G * 255,
+                        NewHSV(Colorpicker.Hue, 1, 1).B * 255
+                    ),
+                    BorderSizePixel = 0,
+                    ZIndex = ZIndex,
+                    Visible = true
+                }) ZIndex += 1
+
+                Draw:UIGradient({
+                    Parent = SaturationGradient,
+                    Rotation = 0,
+                    Color = NewColorSequence({
+                        NewColorSequenceKeypoint(0, White),
+                        NewColorSequenceKeypoint(1, White)
+                    }),
+                    Transparency = NewNumberSequence({
+                        NewNumberSequenceKeypoint(0, 1),
+                        NewNumberSequenceKeypoint(1, 0)
+                    })
+                })
+
+                local ValsatGradient = Draw:Frame({
+                    Parent = ValsatFramework,
+                    Position = NewUDim2(0, 0, 0, 0),
+                    Size = NewUDim2(1, 0, 1, 0),
+                    BackgroundColor3 = Black,
+                    BorderSizePixel = 0,
+                    ZIndex = ZIndex,
+                    Visible = true
+                }) ZIndex += 1
+
+                Draw:UIGradient({
+                    Parent = ValsatGradient,
+                    Transparency = NewNumberSequence({
+                        NewNumberSequenceKeypoint(0, 1),
+                        NewNumberSequenceKeypoint(1, 0)
+                    })
+                })
+
+                local ValsatCursor = Draw:Frame({
+                    Parent = ValsatFramework,
+                    Position = NewUDim2(Colorpicker.Saturation, -1, 1 - Colorpicker.Vibrance, -1),
+                    Size = NewUDim2(0, 2, 0, 2),
+                    BackgroundColor3 = White,
+                    BorderColor3 = Black,
+                    ZIndex = ZIndex,
+                    Visible = true
+                })
+                
+                ValsatFramework.MouseButton1Down:Connect(function()
+                    local AbsolutePosition = ValsatFramework.AbsolutePosition
+                    local AbsoluteSize = ValsatFramework.AbsoluteSize
+
+                    local MinX, MinY = AbsolutePosition.X, AbsolutePosition.Y
+                    local SizeX, SizeY = AbsoluteSize.X, AbsoluteSize.Y
+                    local MaxX, MaxY = MinX + SizeX, MinY + SizeY
+
+                    while UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
+                        local Saturation = (Clamp(Mouse.X, MinX, MaxX) - MinX) / SizeX
+                        local Vibrance = 1 - ((Clamp(Mouse.Y, MinY, MaxY) - MinY) / SizeY)
+
+                        if Saturation ~= Colorpicker.Saturation or Vibrance ~= Colorpicker.Vibrance then
+                            Colorpicker.Saturation = Saturation
+                            Colorpicker.Vibrance = Vibrance
+
+                            ValsatCursor.Position = NewUDim2(Saturation, -1, 1 - Vibrance, -1)
+
+                            local RGB = NewHSV(Colorpicker.Hue, Saturation, Vibrance)
+                            Colorpicker.Color = RGB
+                            Colorpicker.Framework.BackgroundColor3 = RGB
+
+                            Colorpicker.Callback(Colorpicker.Color, Colorpicker.Transparency)
+                        end
+                        
+                        RenderStepped:Wait()
+                    end
+                end)
+            end
+
+            -- Hue
+            do
+                local HueFramework = Draw:TextButton({ -- TODO The gradient affects this lol
+                    Parent = Framework,
+                    Position = NewUDim2(0, 217, 0, 5),
+                    Size = NewUDim2(0, 12, 1, -26),
+                    BackgroundColor3 = White,
+                    BorderColor3 = NewRGB(12, 12, 12), -- TODO The gradient affects this lol
+                    Text = "",
+                    ZIndex = ZIndex,
+                    Visible = true
+                }) ZIndex += 1
+
+                Draw:UIGradient({
+                    Parent = HueFramework,
+                    Color = NewColorSequence({
+                        NewColorSequenceKeypoint(0, NewRGB(255, 0, 0)),
+                        NewColorSequenceKeypoint(0.17, NewRGB(255, 255, 0)),
+                        NewColorSequenceKeypoint(0.33, NewRGB(0, 255, 0)),
+                        NewColorSequenceKeypoint(0.5, NewRGB(0, 255, 255)),
+                        NewColorSequenceKeypoint(0.67, NewRGB(0, 0, 255)),
+                        NewColorSequenceKeypoint(0.83, NewRGB(255, 0, 255)),
+                        NewColorSequenceKeypoint(1, NewRGB(255, 0, 0))
+                    })
+                })
+
+                local HueCursor = Draw:Frame({
+                    Parent = HueFramework,
+                    Position = NewUDim2(0, -2, Colorpicker.Hue, -1),
+                    Size = NewUDim2(0, 16, 0, 2),
+                    BackgroundColor3 = White,
+                    BorderColor3 = Black,
+                    ZIndex = ZIndex,
+                    Visible = true
+                })
+                
+                HueFramework.MouseButton1Down:Connect(function()
+                    local MinY = HueFramework.AbsolutePosition.Y
+                    local SizeY = HueFramework.AbsoluteSize.Y
+                    local MaxY = MinY + SizeY
+
+                    while UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
+                        local Hue = (Clamp(Mouse.Y, MinY, MaxY) - MinY) / SizeY
+
+                        if Hue ~= Colorpicker.Hue then
+                            Colorpicker.Hue = Hue
+                            HueCursor.Position = NewUDim2(0, -2, Hue, -1)
+
+                            local RGB = NewHSV(Hue, Colorpicker.Saturation, Colorpicker.Vibrance)
+                            Colorpicker.Color = RGB
+                            Colorpicker.Framework.BackgroundColor3 = RGB
+                            SaturationGradient.BackgroundColor3 = NewHSV(Hue, 1, 1)
+
+                            Colorpicker.Callback(Colorpicker.Color, Colorpicker.Transparency)
+                        end
+
+                        RenderStepped:Wait()
+                    end
+                end)
+            end
+
+            -- Transparency
+            do
+                local TransparencyFramework = Draw:TextButton({
+                    Parent = Framework,
+                    Position = NewUDim2(0, 5, 0, 219),
+                    Size = NewUDim2(1, -28, 0, 10),
+                    BackgroundColor3 = White,
+                    BorderColor3 = NewRGB(12, 12, 12),
+                    Text = "",
+                    ZIndex = ZIndex,
+                    Visible = true
+                }) ZIndex += 1
+
+                Draw:UIGradient({
+                    Parent = TransparencyFramework,
+                    Rotation = 0,
+                    Color = NewColorSequence({
+                        NewColorSequenceKeypoint(0, Black),
+                        NewColorSequenceKeypoint(1, White)
+                    })
+                })
+
+                local TransparencyCursor = Draw:Frame({
+                    Parent = TransparencyFramework,
+                    Position = NewUDim2(Colorpicker.Transparency, -1, 0, -2),
+                    Size = NewUDim2(0, 2, 0, 14),
+                    BackgroundColor3 = White,
+                    BorderColor3 = Black,
+                    ZIndex = ZIndex,
+                    Visible = true
+                })
+
+                TransparencyFramework.MouseButton1Down:Connect(function()
+                    local MinX = TransparencyFramework.AbsolutePosition.X
+                    local SizeX = TransparencyFramework.AbsoluteSize.X
+                    local MaxX = MinX + SizeX
+
+                    while UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
+                        local Transparency = (Clamp(Mouse.X, MinX, MaxX) - MinX) / SizeX
+
+                        if Transparency ~= Colorpicker.Transparency then
+                            Colorpicker.Transparency = Transparency
+
+                            TransparencyCursor.Position = NewUDim2(Transparency, -1, 0, -2)
+
+                            Colorpicker.Callback(Colorpicker.Color, Colorpicker.Transparency)
+                        end
+
+                        RenderStepped:Wait()
+                    end
+                end)
+            end
+
+            Colorpicker.OpenContent.Framework = Framework
+        end
+
+        function Colorpicker:Close()
+            local Colorpicker = self
+
+            if Colorpicker.IsOpen then
+                Colorpicker.IsOpen = false
+                Menu.CurrentContent = nil
+
+                Colorpicker.RepositionConnection:Disconnect()
+                Destroy(Colorpicker.OpenContent.Framework)
+
+                Colorpicker.OpenContent = {}
+            end
+        end
+
+        --[[function Colorpicker:Copy()
+            Menu.CopiedColor = {Colorpicker.Color, Colorpicker.Transparency}
+        end
+
+        function Colorpicker:Paste()
+            local Copied = Menu.CopiedColor
+            if not Copied then return end
+            self:SetValue(Menu.CopiedColor[1], Menu.CopiedColor[2])
+        end]]
+
+        function Colorpicker:SetValue(Color, Transparency)
+            local Hue, Saturation, Vibrance = ToHSV(Color)
+
+            self.Hue = Hue
+            self.Saturation = Saturation
+            self.Vibrance = Vibrance
+
+            --self.Color = Color
+            self.Transparency = Transparency
+
+            local RGB = NewHSV(Hue, Saturation, Vibrance)
+            self.Color = RGB
+
+            self.Framework.BackgroundColor3 = RGB
+
+            self.Callback(RGB, Transparency)
+        end
+    end
+
+
+    -- Hotkey Class
+    do
+        function Hotkey.new(Configuration, Parameters)
+            -- Configuration
+            assert(typeof(Configuration) == "table", "Hotkey.new - Configuration missing! Table expected\n" .. Traceback())
+            assert(typeof(Configuration.ContentHolder) == "Instance", "Hotkey.new - Invalid ContentHolder type! Instance expected\n" .. Traceback())
+            assert(typeof(Configuration.Position) == "UDim2", "Hotkey.new - Invalid Position type! Table expected\n" .. Traceback())
+            assert(typeof(Configuration.ZIndex) == "number", "Hotkey.new - Invalid ZIndex type! Number expected\n" .. Traceback())
+
+            -- Parameters
+            local Parameters = Parameters or {}
+            local Key = Parameters.Key or nil
+            local Mode = Parameters.Mode or "Toggle"
+            local Modes = Parameters.Modes or {"Always on", "On hotkey", "Toggle", "Off hotkey"}
+            local Value = Parameters.Value or false
+            local Changed = Parameters.Changed or function() end
+            local Callback = Parameters.Callback or function() end
+
+            local Self = {
+                Class = "Hotkey",
+                NoSave = Parameters.NoSave or false,
+
+                IsOpen = false,
+                IsSelecting = false,
+                SelectingConnection = nil,
+
+                OpenContent = {},
+
+                Key = Key,
+                Mode = Mode,
+                Modes = Modes,
+                Value = (Mode == "Always on" or Mode == "Off hotkey") or Value, -- Well this gets overwritten (if key provided) anyway TODO
+                Changed = Changed,
+                Callback = Callback,
+
+                ZIndex = Configuration.ZIndex
+            } setmetatable(Self, Hotkey)
+
+
+            -- Rendering
+            do
+                local ZIndex = Self.ZIndex
+
+                local Framework = Draw:TextButton({
+                    Parent = Configuration.ContentHolder,
+                    Position = Configuration.Position,
+                    Size = NewUDim2(0, 17, 0, 8),
+                    BackgroundTransparency = 1,
+                    Text = "[-]",
+                    FontFace = Fonts[3][1],
+                    TextSize = Fonts[3][2],
+                    TextColor3 = NewRGB(114, 114, 114),
+                    TextXAlignment = Enum.TextXAlignment.Right,
+                    ZIndex = ZIndex,
+                    Visible = true
+                })
+
+                Draw:UIStroke({
+                    Parent = Framework,
+                    Color = Black,
+                    Transparency = 0.65
+                })
+
+                Self.Framework = Framework
+
+                Self.ZIndex = ZIndex
+            end
+
+            
+            -- Connections
+            do
+                Self.Framework.MouseButton1Down:Connect(function()
+                    Self.IsSelecting = true
+                    Self.Framework.TextColor3 = NewRGB(255, 0, 0)
+
+                    Wait()
+
+                    Self.SelectingConnection = UserInputService.InputBegan:Connect(function(Input)
+                        local Selected = Self:SetKeyFromInput(Input.KeyCode.Name ~= "Unknown" and Input.KeyCode or Input.UserInputType)
+
+                        Wait()
+
+                        if Selected then
+                            Self.IsSelecting = false
+                            Self.Framework.TextColor3 = NewRGB(114, 114, 114)
+
+                            Self.SelectingConnection:Disconnect()
+                            Self.SelectingConnection = nil
+                        end
+                    end)
+                end)
+
+                Self.Framework.MouseButton2Down:Connect(function()
+                    Self[Self.IsOpen and "Close" or "Open"](Self)
+                end)
+
+                Self.Framework.MouseEnter:Connect(function()
+                    Self.Framework.TextColor3 = Self.IsSelecting and NewRGB(255, 0, 0) or NewRGB(144, 144, 144)
+                end)
+
+                Self.Framework.MouseLeave:Connect(function()
+                    Self.Framework.TextColor3 = Self.IsSelecting and NewRGB(255, 0, 0) or NewRGB(114, 114, 114)
+                end)
+
+                Menu.InputBegan[#Menu.InputBegan + 1] = function(Input)
+                    local Key, Mode = Self.Key, Self.Mode
+                    if Key and not Self.IsSelecting and (Input.KeyCode == Key or Input.UserInputType == Key) then
+                        if Mode == "Toggle" then
+                            Self.Value = not Self.Value
+                        elseif Mode == "On hotkey" then
+                            Self.Value = true
+                        elseif Mode == "Off hotkey" then
+                            Self.Value = false
+                        else
+                            return
+                        end
+
+                        Self.Callback(Self.Value)
+                    end
+                end
+
+                Menu.InputEnded[#Menu.InputEnded + 1] = function(Input)
+                    local Key, Mode = Self.Key, Self.Mode
+                    if Key and not Self.IsSelecting and (Input.KeyCode == Key or Input.UserInputType == Key) then
+                        if Mode == "On hotkey" or Mode == "Off hotkey" then
+                            Self.Value = Mode == "Off hotkey"
+                            Self.Callback(Self.Value)
+                        end
+                    end
+                end
+            end
+
+            Self:SetKeyFromInput(Self.Key)
+
+            return Self
+        end
+
+        function Hotkey:SetKeyFromInput(Input)
+            if not Input or not Input.EnumType then
+                return false
+            end
+
+            local InputName = Input.Name
+
+            if InputName == "Escape" then
+                local Hotkey = self
+
+                Hotkey.Key = nil
+                Hotkey.Value = Hotkey.Mode == "Always on" or Hotkey.Mode == "Off hotkey"
+                Hotkey.Framework.Text = "[-]"
+
+                Hotkey.Changed(Hotkey.Key)
+                Hotkey.Callback(Hotkey.Value)
+                return true
+            end
+
+            if Find(KeyCodes, InputName) or Find(InputTypes, InputName) then
+                local Hotkey = self
+
+                Hotkey.Key = Input.EnumType[InputName]
+                Hotkey.Value = Hotkey.Mode == "Always on" or Hotkey.Mode == "Off hotkey"
+                Hotkey.Framework.Text = "[" .. (InputShorts[InputName] or InputName) .. "]"
+
+                Hotkey.Changed(Hotkey.Key)
+                Hotkey.Callback(Hotkey.Value)
+                return true
+            end
+
+            return false
+        end
+
+        function Hotkey:Open() -- Proud of this one TODO rewrite other open funcs
+            if Menu.CurrentContent then
+                Menu.CurrentContent:Close()
+            end
+
+            local Hotkey = self
+            local ModesIndex = #Hotkey.Modes
+
+            if ModesIndex < 1 then
+                return
+            end
+
+            Menu.CurrentContent = Hotkey
+            Hotkey.IsOpen = true
+
+            local ZIndex = Hotkey.ZIndex + 2000
+
+            local AbsolutePosition = Hotkey.Framework.AbsolutePosition
+            local AbsoluteSize = Hotkey.Framework.AbsoluteSize
+
+            local Framework = Draw:Frame({
+                Parent = Menu.Overlay,
+                Position = NewUDim2(0, AbsolutePosition.X + 19, 0, AbsolutePosition.Y + AbsoluteSize.Y + 3 + GetGuiInset(GuiService).Y),
+                Size = NewUDim2(0, 100 - 2, 0, 20 * ModesIndex),
+                BackgroundColor3 = NewRGB(35, 35, 35),
+                BorderColor3 = NewRGB(12, 12, 12),
+                ZIndex = ZIndex,
+                Visible = true
+            }) ZIndex += 1
+
+            Hotkey.OpenContent.RepositionConnection = GetPropertyChangedSignal(Hotkey.Framework, "AbsolutePosition"):Connect(function()
+                local AbsolutePosition = Hotkey.Framework.AbsolutePosition
+                Framework.Position = NewUDim2(0, AbsolutePosition.X + 19, 0, AbsolutePosition.Y + Hotkey.Framework.AbsoluteSize.Y + 3 + GetGuiInset(GuiService).Y)
+            end)
+            
+
+            local Modes = Hotkey.Modes
+            for i = 1, ModesIndex do
+                local Mode = Modes[i]
+                local IsChosen = Hotkey.Mode == Mode
+
+                local Button = Draw:TextButton({
+                    Parent = Framework,
+                    Position = NewUDim2(0, 0, 0, 20 * (i - 1)),
+                    Size = NewUDim2(1, 0, 0, 20),
+                    BackgroundColor3 = NewRGB(35, 35, 35),
+                    BorderSizePixel = 0,
+                    Text = "",
+                    ZIndex = ZIndex,
+                    Visible = true
+                })
+
+                local FontSet = Fonts[IsChosen and 2 or 1]
+                local Text = Draw:TextLabel({
+                    Parent = Button,
+                    Position = NewUDim2(0, 6, 0, 0),
+                    Size = NewUDim2(1, -4, 1, 0),
+                    Text = Mode,
+                    FontFace = FontSet[1],
+                    TextSize = FontSet[2],
+                    TextColor3 = IsChosen and Theme["Accent"] or FontSet[3],
+                    TextXAlignment = "Left",
+                    ZIndex = ZIndex,
+                    Visible = true
+                })
+
+                if IsChosen then
+                    Hotkey.OpenContent.SelectedLabel = Text
+                end
+
+                Button.MouseButton1Down:Connect(function()
+                    local SelectedLabel = Hotkey.OpenContent.SelectedLabel 
+                    if SelectedLabel then
+                        SelectedLabel.FontFace = Fonts[1][1]
+                        SelectedLabel.TextSize = Fonts[1][2]
+                        SelectedLabel.TextColor3 = Fonts[1][3]
+                    end
+
+                    Hotkey.Mode = Mode
+                    Hotkey.OpenContent.SelectedLabel = Text
+                    Text.FontFace = Fonts[2][1]
+                    Text.TextSize = Fonts[2][2]
+                    Text.TextColor3 = Theme["Accent"]
+
+                    Hotkey.Value = (Mode == "Always on" or Mode == "Off hotkey")
+                    Hotkey.Callback(Hotkey.Value)
+                end)
+
+                Button.MouseEnter:Connect(function()
+                    Button.BackgroundColor3 = NewRGB(25, 25, 25)
+                    if Hotkey.Mode == Mode then return end
+                    local Font = Fonts[2]
+                    Text.FontFace = Font[1]
+                    Text.TextSize = Font[2]
+                    Text.TextColor3 = Font[3]
+                end)
+
+                Button.MouseLeave:Connect(function()
+                    Button.BackgroundColor3 = NewRGB(35, 35, 35)
+                    if Hotkey.Mode == Mode then return end
+                    local Font = Fonts[1]
+                    Text.FontFace = Font[1]
+                    Text.TextSize = Font[2]
+                    Text.TextColor3 = Font[3]
+                end)
+            end
+
+            Hotkey.OpenContent.Framework = Framework
+        end
+
+        function Hotkey:Close()
+            local Hotkey = self
+
+            if Hotkey.IsOpen then
+                Hotkey.IsOpen = false
+                Menu.CurrentContent = nil
+
+                Hotkey.OpenContent.RepositionConnection:Disconnect()
+                Destroy(Hotkey.OpenContent.Framework)
+
+                Hotkey.OpenContent = {}
+            end
+        end
+
+        function Hotkey:SetValue(Key, Mode, Value) -- todo rewrite this and all
+            local Hotkey = self
+
+            Value = (Mode == "Always on" or Mode == "Off hotkey") or Value
+            Hotkey.Key, Hotkey.Mode, Hotkey.Value = Key, Mode, Value
+
+            Hotkey:SetKeyFromInput({Name = Key and Key.Name or "Escape", EnumType = Key and Key.EnumType or "-"})
+        end
+    end
+
+
+    -- Textbox
+    do
+        function Textbox.new(Configuration, Parameters)
+            -- Configuration
+            assert(typeof(Configuration) == "table", "Textbox.new - Configuration missing! Table expected\n" .. Traceback())
+            assert(typeof(Configuration.ContentHolder) == "Instance", "Textbox.new - Invalid ContentHolder type! Instance expected\n" .. Traceback())
+            assert(typeof(Configuration.Offset) == "table", "Textbox.new - Invalid Offset type! Table expected\n" .. Traceback())
+            assert(typeof(Configuration.ZIndex) == "number", "Textbox.new - Invalid ZIndex type! Number expected\n" .. Traceback())
+
+            -- Parameters
+            local Parameters = Parameters or {}
+            local Name = Parameters.Name or nil
+            local Value = Parameters.Value or ""
+            local Callback = Parameters.Callback or function() end
+
+            -- Self
+            local Self = {
+                Class = "Textbox",
+                NoSave = Parameters.NoSave or false,
+
+                Name = Name,
+                Named = Name ~= nil,
+                Value = Value,
+                Callback = Callback,
+
+                Height = Name ~= nil and 36 or 25,
+
+                ZIndex = Configuration.ZIndex
+            } setmetatable(Self, Textbox)
+
+
+            -- Rendering
+            do
+                local ZIndex = Self.ZIndex
+
+                local Framework = Draw:Frame({
+                    Parent = Configuration.ContentHolder,
+                    Position = NewUDim2(0, Configuration.Offset[1], 0, Configuration.Offset[2]),
+                    Size = NewUDim2(1, 0, 0, Self.Named and 31 or 20),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    ZIndex = ZIndex,
+                    Visible = true
+                }) ZIndex += 1
+
+                if Self.Named then
+                    local Title = Draw:TextLabel({
+                        Parent = Framework,
+                        Position = NewUDim2(0, 38, 0, 2),
+                        Size = NewUDim2(0, 1, 0, 1),
+                        Text = Self.Name,
+                        TextColor3 = NewRGB(212, 212, 212),
+                        TextXAlignment = Enum.TextXAlignment.Left,
+                        ZIndex = ZIndex,
+                        Visible = true
+                    }) ZIndex += 1
+
+                    Self.Title = Title
+                end
+
+                local Outline = Draw:Frame({
+                    Parent = Framework,
+                    Position = NewUDim2(0, 39, 0, Self.Named and 12 or 1),
+                    Size = NewUDim2(1, -97, 0, 18),
+                    BackgroundColor3 = NewRGB(50, 50, 50),
+                    BorderColor3 = NewRGB(12, 12, 12),
+                    ZIndex = ZIndex,
+                    Visible = true
+                }) ZIndex += 1
+
+                local Inline = Draw:Textbox({
+                    Parent = Outline,
+                    Position = NewUDim2(0, 2, 0, 2),
+                    Size = NewUDim2(1, -4, 1, -4),
+                    BackgroundColor3 = NewRGB(25, 25, 25),
+                    BorderColor3 = NewRGB(16, 16, 16),
+                    Text = " " .. Self.Value,
+                    TextColor3 = NewRGB(205, 205, 205),
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    ZIndex = ZIndex,
+                    Visible = true
+                }) ZIndex += 1
+
+                Self.Outline = Outline
+                Self.Inline = Inline
+
+                Self.ZIndex = ZIndex
+            end
+
+
+            -- Connections
+            do
+                local Inline = Self.Inline
+                GetPropertyChangedSignal(Inline, "Text"):Connect(function()
+                    if Sub(Inline.Text, 1, 1) ~= " " then
+                        Inline.Text = " " .. Inline.Text
+                        Inline.CursorPosition = #Inline.Text + 1
+                    end
+
+                    Self.Value = Sub(Inline.Text, 2)
+                    Self.Callback(Self.Value)
+                end)
+
+                Inline.Focused:Connect(function()
+                    Self.Inline.TextColor3 = Theme["Accent"]
+                end)
+
+                Inline.FocusLost:Connect(function()
+                    Self.Inline.TextColor3 = NewRGB(205, 205, 205)
+                end)
+            end
+
+
+            return Self
+        end
+
+        function Textbox:SetValue(String) -- We don't need the callback here because the textbox has a GetPropertyChangedSignal connection
+            self.Inline.Text = " " .. String
+        end
+    end
+
+
+    -- List
+    do
+        function List.new(Configuration, Parameters)
+            -- Configuration
+            assert(typeof(Configuration) == "table", "List.new - Configuration missing! Table expected\n" .. Traceback())
+            assert(typeof(Configuration.ContentHolder) == "Instance", "List.new - Invalid ContentHolder type! Instance expected\n" .. Traceback())
+            assert(typeof(Configuration.Offset) == "table", "List.new - Invalid Offset type! Table expected\n" .. Traceback())
+            assert(typeof(Configuration.ZIndex) == "number", "List.new - Invalid ZIndex type! Number expected\n" .. Traceback())
+
+            -- Parameters
+            local Parameters = Parameters or {}
+            local Options = Parameters.Options or {"option 1", "option 2", "option 3"}
+            local Length = Parameters.Length or 126
+            local Callback = Parameters.Callback or function() end
+
+            -- Self
+            local Self = {
+                Class = "List",
+                NoSave = Parameters.NoSave or false,
+
+                Value = nil,
+                Options = Options,
+                Length = Length,
+                Callback = Callback,
+
+                Height = Length + 5,
+
+                Frameworks = {},
+                FrameworksIndex = 0,
+
+                ZIndex = Configuration.ZIndex
+            } setmetatable(Self, List)
+
+            -- Rendering
+            do
+                local ZIndex = Self.ZIndex
+
+                local Framework = Draw:Frame({
+                    Parent = Configuration.ContentHolder,
+                    Position = NewUDim2(0, Configuration.Offset[1], 0, Configuration.Offset[2]),
+                    Size = NewUDim2(1, 0, 0, Self.Length),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    ZIndex = ZIndex,
+                    Visible = true
+                }) ZIndex += 1
+
+                local Outline = Draw:Frame({
+                    Parent = Framework,
+                    Position = NewUDim2(0, 39, 0, 1),
+                    Size = NewUDim2(1, -97, 1, -2),
+                    BackgroundColor3 = NewRGB(35, 35, 35),
+                    BorderColor3 = NewRGB(12, 12, 12),
+                    ZIndex = ZIndex,
+                    Visible = true
+                }) ZIndex += 1
+
+                local Inline = Draw:ScrollingFrame({
+                    Parent = Outline,
+                    Position = NewUDim2(0, 1, 0, 1),
+                    Size = NewUDim2(1, -2, 1, -2),
+                    BackgroundColor3 = NewRGB(40, 40, 40),
+                    BorderColor3 = NewRGB(35, 35, 35),
+                    ScrollBarImageColor3 = NewRGB(65, 65, 65),
+                    ScrollBarThickness = 5,
+                    MidImage = Assets["Scroll Bar"],
+                    TopImage = Assets["Scroll Bar"],
+                    BottomImage = Assets["Scroll Bar"],
+                    VerticalScrollBarInset = Enum.ScrollBarInset.None,
+                    ZIndex = ZIndex,
+                    Visible = true
+                }) ZIndex += 1
+
+                local Background = Draw:Frame({
+                    Parent = Inline,
+                    Position = NewUDim2(0, 0, 0, 0),
+                    Size = NewUDim2(1, 0, 1, 0),
+                    BackgroundColor3 = NewRGB(35, 35, 35),
+                    BorderSizePixel = 0,
+                    ZIndex = ZIndex,
+                    Visible = true
+                }) ZIndex += 1
+
+                local ArrowUp = Draw:ImageLabel({
+                    Parent = Outline,
+                    Position = NewUDim2(1, -17, 0, 6),
+                    Size = NewUDim2(0, 5, 0, 4),
+                    Image = Assets["Arrow Up"],
+                    ImageColor3 = NewRGB(205, 205, 205),
+                    ImageTransparency = 1,
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    ZIndex = ZIndex + 1,
+                    Visible = true
+                })
+
+                local ArrowDown = Draw:ImageLabel({
+                    Parent = Outline,
+                    Position = NewUDim2(1, -17, 1, -10),
+                    Size = NewUDim2(0, 5, 0, 4),
+                    Image = Assets["Arrow Down"],
+                    ImageColor3 = NewRGB(205, 205, 205),
+                    ImageTransparency = 1,
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    ZIndex = ZIndex + 1,
+                    Visible = true
+                })
+
+                Self.Outline = Outline
+                Self.Inline = Inline
+                Self.Background = Background
+
+                Self.ArrowUp = ArrowUp
+                Self.ArrowDown = ArrowDown
+
+                Self.ZIndex = ZIndex
+            end
+
+            -- Connections
+            do
+                local Inline = Self.Inline
+                GetPropertyChangedSignal(Inline, "CanvasPosition"):Connect(function()
+                    Self.ArrowUp.ImageTransparency = (Inline.CanvasPosition.Y - 12) <= 0 and 1 or 0
+                    Self.ArrowDown.ImageTransparency = (Inline.AbsoluteCanvasSize.Y - (Inline.CanvasPosition.Y + 10) >= Inline.AbsoluteWindowSize.Y) and 0 or 1  
+                end)
+            end
+
+            local Options = Self.Options
+            for i = 1, #Options do
+                Self:AddOption(Options[i])
+            end
+
+            Self:SetValue(Parameters.Value or Options[1], true)
+            Self:UpdateScroll()
+
+            return Self
+        end
+
+        function List:AddOption(Name)
+            local List = self
+
+            List.Options[#List.Options + 1] = Name
+
+            local Button = Draw:TextButton({
+                Parent = List.Inline,
+                Position = NewUDim2(0, 0, 0, 0),
+                Size = NewUDim2(1, 0, 0, 16),
+                BackgroundColor3 = NewRGB(35, 35, 35),
+                BorderSizePixel = 0,
+                Text = "",
+                ZIndex = List.ZIndex + 1,
+                Visible = true
+            })
+
+            local Label = Draw:TextLabel({
+                Parent = Button,
+                Position = NewUDim2(0, 8, 0, 8),
+                Size = NewUDim2(1, -20, 0, 0),
+                BackgroundTransparency = 1,
+                Text = Name,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                ZIndex = List.ZIndex + 1,
+                Visible = true
+            })
+
+            local Item = {
+                Button = Button,
+                Label = Label
+            }
+
+            Button.MouseButton1Down:Connect(function()
+                local CurrentItem = List.CurrentFramework
+                if CurrentItem then
+                    local Font = Fonts[1]
+
+                    CurrentItem.Label.FontFace = Font[1]
+                    CurrentItem.Label.TextSize = Font[2]
+                    CurrentItem.Label.TextColor3 = Font[3]
+                    CurrentItem.Button.BackgroundColor3 = NewRGB(35, 35, 35)
+                    Colors[CurrentItem.Label] = nil
+                end
+
+                local Font = Fonts[2]
+                Label.FontFace = Font[1]
+                Label.TextSize = Font[2]
+                Label.TextColor3 = Theme["Accent"]
+                Button.BackgroundColor3 = NewRGB(26, 26, 26)
+                List.CurrentFramework = Item
+                List.Value = Label.Text
+
+                Colors[Label] = {{"Accent", "TextColor3"}}
+
+                List.Callback(List.Value)
+            end)
+
+            List.FrameworksIndex += 1
+            List.Frameworks[List.FrameworksIndex] = Item
+            List:UpdatePositions()
+        end
+
+        function List:RemoveOption(Name)
+            local List = self
+
+            for i = 1, List.FrameworksIndex do
+                local Item = List.Frameworks[i]
+
+                if Item.Label.Text == Name then
+                    Destroy(Item.Button)
+                    Remove(List.Frameworks, i)
+                    List.FrameworksIndex -= 1
+
+                    if Item == List.CurrentFramework then
+                        List.CurrentFramework = nil
+                    end
+
+                    break
+                end
+            end
+
+            for i = #List.Options, 1, -1 do
+                if List.Options[i] == Name then
+                    Remove(List.Options, i)
+                    break
+                end
+            end
+
+            List:UpdatePositions()
+        end
+
+        function List:UpdateScroll()
+            local List = self
+
+            local VisibleCount = 0
+            for i = 1, List.FrameworksIndex do
+                if List.Frameworks[i].Button.Visible then
+                    VisibleCount += 1
+                end
+            end
+
+            local Inline = List.Inline
+            local Delta = 18 * VisibleCount - Inline.AbsoluteSize.Y
+
+            if Delta > 0 then
+                Inline.ScrollingEnabled = true
+                Inline.CanvasSize = NewUDim2(0, 0, 1, Delta - 4)
+            else
+                Inline.ScrollingEnabled = false
+                Inline.CanvasSize = NewUDim2(0, 0, 0, 0)
+            end
+
+            List.ArrowUp.ImageTransparency = (Inline.CanvasPosition.Y - 12) <= 0 and 1 or 0
+            List.ArrowDown.ImageTransparency = (Inline.AbsoluteCanvasSize.Y - (Inline.CanvasPosition.Y + 10) >= Inline.AbsoluteWindowSize.Y) and 0 or 1
+        end
+
+        function List:UpdatePositions()
+            local List = self
+            local VisibleIndex = 0
+
+            for i = 1, List.FrameworksIndex do
+                local Item = List.Frameworks[i]
+
+                if Item.Button.Visible then
+                    Item.Button.Position = NewUDim2(0, 0, 0, 18 * VisibleIndex)
+                    VisibleIndex += 1
+                end
+            end
+
+            List:UpdateScroll()
+        end
+
+        function List:Filter(Name)
+            local List = self
+            local LowerName = Lower(Name)
+
+            for i = 1, List.FrameworksIndex do
+                local Item = List.Frameworks[i]
+                local LowerOption = Lower(Item.Label.Text)
+
+                Item.Button.Visible = (LowerName == "" or Sub(LowerOption, 1, #LowerName) == LowerName or SFind(LowerOption, LowerName, 1, true))
+            end
+
+            List:UpdatePositions()
+        end
+
+        function List:ClearOptions()
+            local List = self
+
+            local Options = List.Options
+            for i = #Options, 1, -1 do
+                List:RemoveOption(Options[i])
+            end
+        end
+
+        function List:SetValue(Value, NoCallback)
+            local List = self
+
+            local CurrentFramework = List.CurrentFramework
+            if CurrentFramework then
+                local Label = CurrentFramework.Label
+                local Font = Fonts[1]
+
+                Label.FontFace = Font[1]
+                Label.TextSize = Font[2]
+                Label.TextColor3 = Font[3]
+                CurrentFramework.Button.BackgroundColor3 = NewRGB(35, 35, 35)
+                Colors[Label] = nil
+                List.CurrentFramework = nil
+            end
+
+            for i = 1, List.FrameworksIndex do
+                local Item = List.Frameworks[i]
+                local Label = Item.Label
+
+                if Label.Text == Value then
+                    local Font = Fonts[2]
+                    Label.FontFace = Font[1]
+                    Label.TextSize = Font[2]
+                    Label.TextColor3 = Theme["Accent"]
+                    Item.Button.BackgroundColor3 = NewRGB(26, 26, 26)
+
+                    List.CurrentFramework = Item
+                    List.Value = Value
+
+                    Colors[Label] = {{"Accent", "TextColor3"}}
+
+                    if not NoCallback then
+                        List.Callback(Value)
+                    end
+
+                    return true
+                end
+            end
+
+            List.Value = nil
+            return false
+        end
+    end
+
+
+    -- Notifications
+    do
+        local BaseOffsetX = 20
+        local BaseOffsetY = 60
+        Menu.CurrentNotifications = {}
+        Menu.NotificationManagement = RenderStepped:Connect(function(DeltaTime) -- Credit to vader, i pasted those notifications cause they're very good looking
+            local Sorted = {}
+
+            Sort(Menu.CurrentNotifications, function(a, b)
+                if a.Priority == b.Priority then
+                    return a.Created < b.Created
+                else
+                    return a.Priority > b.Priority
+                end
+            end)
+
+            local Sorted = {}
+            for i = 1, #Menu.CurrentNotifications do
+                Sorted[#Sorted + 1] = Menu.CurrentNotifications[i]
+            end
+
+            local CurrentLevel = 0
+            for i = 1, #Sorted do
+                local Notification = Sorted[i]
+
+                if Notification.AliveTime > Notification.LifeTime then
+                    Notification.Container.Visible = false
+
+                    Destroy(Notification.Container)
+
+                    for k = #Menu.CurrentNotifications, 1, -1 do
+                        if Menu.CurrentNotifications[k] == Notification then
+                            Menu.CurrentNotifications[k] = nil
+                            Remove(Menu.CurrentNotifications, k)
+                        end
+                    end
+                else
+                    Notification.Container.Visible = true
+
+                    if Notification.AliveTime < 1 then
+                        local PercentageMoved = Notification.AliveTime
+                        local ProjectedMovePercentage = (1 / (-2.71828 ^ (PercentageMoved * 8))) + 1
+                        Notification.Container.Position = NewUDim2(0, -240 + ProjectedMovePercentage * 240 + BaseOffsetX, 0, 0)
+                    elseif Notification.AliveTime > Notification.LifeTime - 0.5 then
+                        local PercentageMoved = 2 * (Notification.AliveTime - (Notification.LifeTime - 0.5))
+                        local ProjectedMovePercentage = (1 / (-2.71828 ^ (PercentageMoved))) + 1
+                        Notification.Container.Position = NewUDim2(0, BaseOffsetX - ProjectedMovePercentage * 120, 0, 0)
+                    else
+                        Notification.Container.Position = NewUDim2(0, BaseOffsetX, 0, 0)
+                    end
+
+                    Notification.Container.Position = Notification.Container.Position + NewUDim2(0, 0, 0, BaseOffsetY + CurrentLevel)
+                    CurrentLevel = CurrentLevel + Notification.Container.AbsoluteSize.Y + 8
+
+                    local Fade = 0
+
+                    if Notification.AliveTime < 1 then
+                        Fade = 1 - Notification.AliveTime
+                    elseif Notification.AliveTime > Notification.LifeTime - 0.5 then
+                        Fade = (Notification.AliveTime - (Notification.LifeTime - 0.5)) * 2
+                    end
+                    
+                    Notification.Container.BackgroundTransparency = Fade
+                    Notification.Title.TextTransparency = Fade
+
+                    Notification.AliveTime = Notification.AliveTime + DeltaTime
+                end
+            end
+        end)
+
+        function Menu:CreateNotification(Parameters)
+            local This = {
+                AliveTime = 0,
+                LifeTime = Parameters.LifeTime or 5,
+                Priority = Parameters.Priority or 1,
+                Text = Parameters.Text or "example notification",
+                Color = Parameters.Color or White
+            }
+
+            local TextBounds = Menu:GetTextBounds(This.Text, Fonts[4])
+
+            This.Container = Draw:Frame({
+                Parent = Menu.Overlay,
+                Size = NewUDim2(0, TextBounds.X + 6, 0, TextBounds.Y + 6),
+                Position = NewUDim2(0, 32, 0, 32),
+                BackgroundColor3 = Black,
+                BorderColor3 = NewRGB(12, 12, 12),
+                ZIndex = 100,
+                Visible = true
+            })
+
+            This.Title = Draw:TextLabel({
+                Parent = This.Container,
+                Position = NewUDim2(0, 3, 0, 3),
+                Text = This.Text,
+                FontFace = Fonts[4][1],
+                TextSize = Fonts[4][2],
+                TextColor3 = This.Color,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                AutomaticSize = Enum.AutomaticSize.XY,
+                ZIndex = 101,
+                Visible = true
+            })
+
+            This.Created = Tick()
+            Menu.CurrentNotifications[#Menu.CurrentNotifications + 1] = This
+
+            return This
+        end
+    end
+
+
+    -- Connections
+    do
+		GetPropertyChangedSignal(Workspace.CurrentCamera, "ViewportSize"):Connect(function()
+			ScreenSize = CurrentCamera.ViewportSize
+		end)
+
+        -- Input Handler
+        do
+            local InputBegan = Menu.InputBegan
+            local InputEnded = Menu.InputEnded
+            local InputChanged = Menu.InputChanged
+            
+            UserInputService.InputBegan:Connect(function(Input)
+                for i = 1, #InputBegan do
+                    InputBegan[i](Input)
+                end
+            end)
+
+            UserInputService.InputEnded:Connect(function(Input)
+                for i = 1, #InputEnded do
+                    InputEnded[i](Input)
+                end
+            end)
+
+            UserInputService.InputChanged:Connect(function(Input)
+                for i = 1, #InputChanged do
+                    InputChanged[i](Input)
+                end
+            end)
+        end
+	end
+
+
+    function Menu:SaveConfig(Path) -- Custom configs ahead, i made those so configs are clear and export/import from clipboard is easier (I wanted to avoid json as much as possible)
+        if Match(Path, "^ *$") then return end -- TODO: Add retard-proof checks
+
+        local Lines = {}
+
+        local function SaveNode(Node, Path)
+            for Key, Value in next, Node do
+                local NewPath = {Unpack(Path)}
+                NewPath[#NewPath + 1] = Key
+
+                if Value.Class then
+                    if not Value.NoSave then
+                        local KeyString = Concat(NewPath, ".")
+                        local Class = Value.Class
+
+                        if Class == "Toggle" then
+                            Lines[#Lines + 1] = KeyString .. "=" .. tostring(Value.Value)
+                        elseif Class == "Slider" then
+                            Lines[#Lines + 1] = KeyString .. "=" .. tostring(Value.Value)
+                        elseif Class == "Dropdown" then
+                            Lines[#Lines + 1] = KeyString .. "=" .. Value.Value
+                        elseif Class == "Combobox" then
+                            Lines[#Lines + 1] = KeyString .. "=" .. Concat(Value.Value, ", ")
+                        elseif Class == "Textbox" then
+                            Lines[#Lines + 1] = KeyString .. "=" .. Value.Value
+                        elseif Class == "Hotkey" then
+                            Lines[#Lines + 1] = KeyString .. "=" .. tostring(Value.Key) .. " " .. Value.Mode .. " " .. tostring(Value.Value)
+                        elseif Class == "Colorpicker" then
+                            Lines[#Lines + 1] = KeyString .. "=" .. Value.Hue .. " " .. Value.Saturation .. " " .. Value.Vibrance .. " " .. Value.Transparency
+                        end
+                    end
+                else
+                    SaveNode(Value, NewPath)
+                end
+            end
+        end
+
+        SaveNode(Flags, {})
+        writefile(Path, Concat(Lines, "\n"))
+    end
+
+    local function ResolvePath(Path)
+        local Node = Flags
+
+        for Key in Gmatch(Path, "[^%.]+") do
+            Node = Node[tonumber(Key) or Key]
+            if not Node then return nil end
+        end
+        
+        return Node
+    end
+
+    function Menu:LoadConfig(Path)
+        if not isfile(Path) then return end -- TODO: Add retard-proof checks
+        local Content = readfile(Path)
+
+        for Name, Value in Gmatch(Content, "([^\r\n=]+)=([^\r\n]+)") do
+            local Element = ResolvePath(Name)
+            if not Element or Element.NoSave then continue end
+
+            local Class = Element.Class
+
+            if Class == "Toggle" then
+                Element:SetValue(Value == "true")
+            elseif Class == "Slider" then
+                Element:SetValue(tonumber(Value))
+            elseif Class == "Dropdown" then
+                Element:SetValue(Value)
+            elseif Class == "Combobox" then
+                local Table = {}
+
+                for Item in Gmatch(Value, "%s*([^,]+)") do
+                    Table[#Table + 1] = Item
+                end
+
+                Element:SetValue(Table)
+            elseif Class == "Textbox" then
+                Element:SetValue(Value)
+            elseif Class == "Hotkey" then
+                local KeyString, Mode, Val = Match(Value, "([^%s]+) (.+) ([^%s]+)$")
+                local EnumKey = (KeyString ~= "nil" and SFind(KeyString, "Enum.KeyCode") and Enum.KeyCode[Match(KeyString, "Enum.KeyCode%.(.+)")])
+                            or (KeyString ~= "nil" and SFind(KeyString, "Enum.UserInputType") and Enum.UserInputType[Match(KeyString, "Enum.UserInputType%.(.+)")])
+                Element:SetValue(EnumKey, Mode, Val == "true")
+            elseif Class == "Colorpicker" then
+                local H, S, V, A = Match(Value, "([%d%.%-]+)%s+([%d%.%-]+)%s+([%d%.%-]+)%s+([%d%.%-]+)")
+                Element:SetValue(NewHSV(tonumber(H), tonumber(S), tonumber(V)), tonumber(A))
+            end
+        end
+    end
+
+    function Menu:GetConfigs(Path)
+        local Presets = {}
+        local PresetsIndex = 0
+
+        local FilesList = listfiles(Path)
+        for i = 1, #FilesList do
+            local Name = Match(FilesList[i], "([^/\\]+)%.cfg$")
+
+            if Name then
+                PresetsIndex += 1
+                Presets[PresetsIndex] = Name
+            end
+        end
+
+        return Presets, PresetsIndex
+    end
+
+    function Menu:ExportClipboard(Path)
+        if not isfile(Path) then return end
+        setclipboard(readfile(Path))
+    end
+
+    function Menu:ImportClipboard()
+        local Textbox = NewInstance("TextBox", Menu.Overlay)
+        Textbox.TextTransparency = 1
+
+        Textbox:CaptureFocus()
+        keypress(0x11)  
+        keypress(0x56)
+        Wait(1 / 60)
+        keyrelease(0x11)
+        keyrelease(0x56)
+        Textbox:ReleaseFocus()
+
+        local Copied = Textbox.Text
+        Destroy(Textbox)
+
+        writefile("import", Copied)
+        Menu:LoadConfig("import")
+        delfile("import")
+    end
+
+    if Parameters.Window then
+        Menu.Window = Window.new(Parameters.Window)
+    end
+
+    return Menu, Flags
+end
+
+if true then
+    local Menu = Library:Load()
+
+    local LegitPage = Menu.Window.Pages[3]
+    local VisualsPage = Menu.Window.Pages[4]
+
+    LegitPage:CreateCategories()
+
+    for i = 1, 6 do
+        local Section = LegitPage:CreateSection({Category = i, Name = "Aim Assist", Side = 1, Length = 1}) do
+            Section:CreateToggle({Name = "Enabled"}):CreateHotkey({Mode = "On hotkey"})
+            Section:CreateSlider({Name = "Maximum FOV", Suffix = "°", Value = 10, Minimum = 0, Maximum = 90, Decimals = 0.1})
+            Section:CreateSlider({Name = "Speed", Suffix = "%", Value = 50, Minimum = 1, Maximum = 100})
+            Section:CreateDropdown({Name = "Smoothing", Value = "Linear", Options = {"Linear", "Exponential"}})
+            Section:CreateSlider({Name = "Enemy switching delay", Suffix = "ms", Value = 100, Minimum = 0, Maximum = 2000, Custom = {"Off", 0}})
+            Section:CreateSlider({Name = "Accuracy", Suffix = "%", Value = 60, Minimum = 0, Maximum = 100})
+            Section:CreateDropdown({Name = "Hitscan priority", Value = "Closest", Options = {"Closest", "Head", "Body"}})
+            Section:CreateCombobox({Name = "Hitscan hitboxes", Value = {"Head", "Body", "Arms", "Legs"}, Options = {"Head", "Body", "Arms", "Legs"}})
+            Section:CreateToggle({Name = "Adjust for bullet drop"})
+            Section:CreateToggle({Name = "Adjust for target movement"})
+            Section:CreateToggle({Name = "Visualize FOV"})
+        end
+
+        local Section = LegitPage:CreateSection({Category = i, Name = "Trigger Bot", Side = 2, Length = 0.5}) do
+            Section:CreateToggle({Name = "Enabled"}):CreateHotkey({Mode = "On hotkey"})
+            Section:CreateSlider({Name = "Reaction time", Suffix = "ms", Value = 120, Minimum = 0, Maximum = 400, Custom = {"Off", 0}})
+            Section:CreateCombobox({Name = "Triggerbot hitboxes", Value = {"Head", "Body", "Arms", "Legs"}, Options = {"Head", "Body", "Arms", "Legs"}})
+            Section:CreateToggle({Name = "Magnet triggerbot"})
+            Section:CreateSlider({Name = "Magnet FOV", Suffix = "°", Value = 10, Minimum = 0, Maximum = 90, Decimals = 0.1})
+            Section:CreateSlider({Name = "Magnet speed", Suffix = "%", Value = 50, Minimum = 1, Maximum = 100})
+            Section:CreateSlider({Name = "Magnet accuracy", Suffix = "%", Value = 60, Minimum = 0, Maximum = 100})
+            Section:CreateDropdown({Name = "Magnet priority", Value = "Closest", Options = {"Closest", "Head", "Body"}})
+        end
+
+        local Section = LegitPage:CreateSection({Category = i, Name = "Bullet Redirection", Side = 2, Length = 0.5}) do
+            Section:CreateToggle({Name = "Silent aim"})
+            Section:CreateSlider({Name = "Maximum FOV", Suffix = "°", Value = 10, Minimum = 0, Maximum = 90, Decimals = 0.1})
+            Section:CreateSlider({Name = "Spread", Suffix = "/10st", Value = 3, Minimum = 0, Maximum = 10, Decimals = 0.1, Custom = {"Off", 0}})
+            Section:CreateSlider({Name = "Hit chance", Suffix = "%", Value = 50, Minimum = 0, Maximum = 100, Custom = {"Off", 0}})
+            Section:CreateSlider({Name = "Accuracy", Suffix = "%", Value = 70, Minimum = 0, Maximum = 100})
+            Section:CreateSlider({Name = "Point scale", Suffix = "%", Value = 62, Minimum = 0, Maximum = 95})
+            Section:CreateDropdown({Name = "Hitscan priority", Value = "Closest", Options = {"Closest", "Head", "Body"}})
+            Section:CreateCombobox({Name = "Hitscan hitboxes", Value = {"Head", "Body", "Arms", "Legs"}, Options = {"Head", "Body", "Arms", "Legs"}})
+            Section:CreateToggle({Name = "Adjust for bullet drop"})
+            Section:CreateToggle({Name = "Adjust for target movement"})
+            Section:CreateToggle({Name = "Visualize FOV"})
+        end
+    end
+
+    -- Visuals
+    do
+        local Section = VisualsPage:CreateSection({Name = "Player ESP", Side = 1, Length = 0.6}) do
+            Section:CreateHotkey({Name = "Activation type", Mode = "Always on"})
+            Section:CreateToggle({Name = "Teammates"})
+            Section:CreateToggle({Name = "Dormant"})
+            Section:CreateToggle({Name = "Bounding box"}):CreateColorpicker({Color = Color3.fromRGB(255, 255, 255), Transparency = 0.51})
+            Section:CreateToggle({Name = "Health bar"})
+            Section:CreateToggle({Name = "Name"}):CreateColorpicker({Color = Color3.fromRGB(255, 255, 255), Transparency = 0.78})
+            Section:CreateToggle({Name = "Flags"})
+            Section:CreateToggle({Name = "Weapon text"})
+            Section:CreateToggle({Name = "Weapon icon"}):CreateColorpicker({Color = Color3.fromRGB(255, 255, 255), Transparency = 0.4})
+            Section:CreateToggle({Name = "Ammo"}):CreateColorpicker({Color = Color3.fromRGB(80, 140, 200), Transparency = 0.9})
+            Section:CreateToggle({Name = "Distance"})
+            Section:CreateToggle({Name = "Glow"}):CreateColorpicker({Color = Color3.fromRGB(180, 60, 120), Transparency = 0.6})
+            Section:CreateToggle({Name = "Hit marker"})
+            Section:CreateToggle({Name = "Hit marker sound"})
+            Section:CreateToggle({Name = "Visualize aimbot"}):CreateColorpicker({Color = Color3.fromRGB(20, 100, 255), Transparency = 0.5})
+            Section:CreateToggle({Name = "Visualize aimbot (safe point)"}):CreateColorpicker({Color = Color3.fromRGB(255, 20, 20)})
+            Section:CreateToggle({Name = "Visualize sounds"})
+            Section:CreateToggle({Name = "Line of sight"}):CreateColorpicker({Color = Color3.fromRGB(255, 0, 0)})
+            Section:CreateToggle({Name = "Money"})
+            Section:CreateToggle({Name = "Skeleton"}):CreateColorpicker({Color = Color3.fromRGB(255, 255, 170)})
+            Section:CreateToggle({Name = "Out of FOV arrow"}):CreateColorpicker({Color = Color3.fromRGB(255, 255, 255)})
+        end
+
+        local Section = VisualsPage:CreateSection({Name = "Colored models", Side = 1, Length = 0.5}) do
+            Section:CreateToggle({Name = "Player"}):CreateColorpicker({Color = Color3.fromRGB(150, 200, 60)})
+            Section:CreateToggle({Name = "Player behind wall"}):CreateColorpicker({Color = Color3.fromRGB(60, 120, 180), Transparency = 0.7})
+            Section:CreateToggle({Name = "Teammate"}):CreateColorpicker({Color = Color3.fromRGB(150, 150, 150)})
+            Section:CreateToggle({Name = "Teammate behind wall"}):CreateColorpicker({Color = Color3.fromRGB(255, 255, 255)})
+        end
+    end
+
+    local Section = Menu.Window.Pages[5]:CreateSection({Name = "Miscellaneous", Side = 1, Length = 1}) do
+        Section:CreateSlider({Name = "Override FOV", Value = 90, Minimum = 1, Maximum = 120, Suffix = "°"})
+        Section:CreateSlider({Name = "Override zoom FOV", Value = 100, Minimum = 0, Maximum = 100, Suffix = "%"})
+        Section:CreateToggle({Name = "Knifebot"})
+        --Section:CreateCombobox({Value = {"Swing", "Full stab"}, Options = {"Swing", "Full stab"}})
+        Section:CreateToggle({Name = "Zeusbot"})
+        Section:CreateToggle({Name = "Automatic weapons"})
+        --Section:CreateSlider({Value = 0, Suffix = "ms"})
+        Section:CreateToggle({Name = "Quick switch", Value = true})
+        Section:CreateToggle({Name = "Reveal competetive ranks"})
+        Section:CreateToggle({Name = "Reveal Overwatch players"})
+        Section:CreateToggle({Name = "Auto-accept matchmaking", Value = true})
+        Section:CreateToggle({Name = "Clan tag spammer"})
+        Section:CreateToggle({Name = "Log weapon purchases"})
+        Section:CreateToggle({Name = "Log damage dealt"})
+        Section:CreateToggle({Name = "Automatic grenade release"}):CreateHotkey({Mode = "Toggle"})
+        Section:CreateToggle({Name = "Super toss"})
+        Section:CreateToggle({Name = "Ping spike"}):CreateHotkey({Mode = "On hotkey"})
+        --Section:CreateSlider({Value = 200, Minimum = 0, Maximum = 300, Suffix = "ms"})
+        Section:CreateHotkey({Name = "Free look", Mode = "On hotkey"})
+        Section:CreateToggle({Name = "Persistent kill feed", Value = true})
+        Section:CreateHotkey({Name = "Last second defuse", Key = Enum.KeyCode.R, Mode = "On hotkey"})
+        Section:CreateToggle({Name = "Disable sv_pure", Value = true})
+        Section:CreateToggle({Name = "Rebuy fix", Value = true})
+        Section:CreateToggle({Name = "Draw console output", Value = true})
+        Section:CreateButton({Name = "Steal player name", Confirm = true})
+        Section:CreateButton({Name = "Dump MM wins", Confirm = true})
+    end
+
+    local Section = Menu.Window.Pages[5]:CreateSection({Name = "Movement", Side = 2, Length = 0.5}) do
+        Section:CreateToggle({Name = "Standalone quick stop"})
+        Section:CreateToggle({Name = "Infinite duck", Risky = true})
+        Section:CreateToggle({Name = "Easy strafe"})
+        Section:CreateToggle({Name = "Bunny hop"})
+        Section:CreateToggle({Name = "Air strafe"})
+        --Section:CreateDropdown({Name = "Air strafe direction", Value = "View angles", Options = {"View angles", "Movement key"}})
+        --Section:CreateSlider({Name = "Air strafe smoothing", Value = 100, Minimum = 0, Maximum = 100, Suffix = "%"})
+        --Section:CreateToggle({Name = "Avoid collisions"})
+        --Section:CreateToggle({Name = "Z-Hop"}):CreateHotkey({Key = Enum.KeyCode.T, Mode = "Toggle"})
+        --Section:CreateToggle({Name = "Pre-speed"}):CreateHotkey({Key = Enum.KeyCode.F, Mode = "Toggle"})
+        Section:CreateToggle({Name = "No fall damage"}):CreateColorpicker({Color = Color3.fromRGB(19, 159, 254)})
+        Section:CreateDropdown({Name = "Air duck", Value = "Off", Options = {"Off", "Spam"}})
+        Section:CreateToggle({Name = "Blockbot"}):CreateHotkey({Mode = "Toggle"})
+        Section:CreateToggle({Name = "Jump at edge"}):CreateHotkey({Key = Enum.UserInputType.MouseButton3, Mode = "On hotkey"})
+        Section:CreateToggle({Name = "Fast walk"})
+    end
+
+    local Section = Menu.Window.Pages[5]:CreateSection({Name = "Settings", Side = 2, Length = 0.5}) do
+        Section:CreateHotkey({Name = "Menu key", Key = Enum.KeyCode.Insert})
+        Section:CreateColorpicker({Name = "Menu color", Color = Menu.Theme["Accent"], Callback = function(Color)
+            Menu:ChangeThemeColor("Accent", Color)
+        end})
+        Section:CreateDropdown({Name = "DPI scale", Value = "100%", Options = {"75%", "100%", "125%", "150%", "200%"}})
+        Section:CreateToggle({Name = "Draw console output"})
+        Section:CreateToggle({Name = "Hide from OBS"})
+        Section:CreateToggle({Name = "Low FPS warning"})
+        Section:CreateToggle({Name = "Lock menu layout"})
+        Section:CreateButton({Name = "Reset menu layout", Confirm = true})
+        Section:CreateButton({Name = "Unload", Confirm = true})
+    end
+
+    local Section = Menu.Window.Pages[8]:CreateSection({Name = "Presets", Side = 1, Length = 1}) do
+        Section:CreateList()
+        Section:CreateTextbox()
+        Section:CreateButton({Name = "Load"})
+        Section:CreateButton({Name = "Save"})
+        Section:CreateButton({Name = "Delete"})
+        Section:CreateButton({Name = "Reset"})
+        Section:CreateButton({Name = "Import from clipboard"})
+        Section:CreateButton({Name = "Export to clipboard"})
+    end
+
+    local Section = Menu.Window.Pages[8]:CreateSection({Name = "Lua", Side = 2, Length = 1}) do
+        Section:CreateToggle({Name = "Enabled", Value = true})
+        Section:CreateToggle({Name = "Allow unsafe scripts"})
+        Section:CreateButton({Name = "Reload active scripts"})
+        Section:CreateSearchList({Length = 306, Options = {"1potential 0fix", "3rd person (1)", "acid_beta", "acid_debug", "acid_user", "aethletic-gs", "grenade helper", "grenade helper debug", "yaw fix", "roll beta", "rusolver (1)", "rusolver", "network"}})
+        Section:CreateLabel({Text = "Updated 44 days ago"})
+        Section:CreateToggle({Name = "Load on startup"})
+        Section:CreateButton({Name = "Load script"})
+    end
+
+    Menu.Window:Open()
+end
+
+return Library
