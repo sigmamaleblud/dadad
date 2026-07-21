@@ -569,17 +569,21 @@ function Library:Load(Parameters)
             Enabled = true
 		})
 
-        function Menu:GetTextBounds(Text, Font)
-            local Params = NewInstance("GetTextBoundsParams")
-
-            Params.Text = Text
-            Params.Font = Font[1]
-            Params.Size = Font[2]
-            Params.Width = ScreenSize.X
-
-if Params and typeof(Params.Font) == "EnumItem" then
-    Params.Font = Font.fromEnum(Params.Font)
+      function Menu:GetTextBounds(Text, Font, Size)
+    if typeof(Font) == "EnumItem" then
+        Font = Font.fromEnum(Font)
+    end
+    
+    local Params = {
+        Text = Text,
+        Font = Font,
+        Size = Size or 12, -- если Size не передан, ставим стандартный 12
+        Width = 10000
+    }
+    
+    return GetTextBoundsAsync(TextService, Params)
 end
+
 local Bounds = GetTextBoundsAsync(TextService, Params) 
 
 
