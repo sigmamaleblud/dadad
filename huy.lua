@@ -868,5 +868,14 @@ function UILib:Notify(text, duration)
         end
     end)
 end
+function Sec:AddDynamicLabel(text)
+    local f = N("Frame", {Size=UDim2.new(1,0,0,18), BackgroundColor3=T.BG2, BorderSizePixel=0}, self._body)
+    local lbl = N("TextLabel", {
+        Size=UDim2.new(1,-16,1,0), Position=UDim2.new(0,8,0,0),
+        BackgroundTransparency=1, Text=text, TextColor3=T.TXT2,
+        TextXAlignment=Enum.TextXAlignment.Left, TextSize=10, Font=Enum.Font.Gotham,
+    }, f)
+    return { SetText = function(_, t) lbl.Text = t end }
+end
 ------------------------------------------------------------------------
 return UILib
