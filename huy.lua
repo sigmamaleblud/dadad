@@ -719,5 +719,154 @@ function Sec:AddLabel(text)
     },f)
 end
 
+-- ============================================================
+-- UILib EXTENSIONS — вставить перед "return UILib"
+-- ============================================================
+
+function Sec:AddColorPicker(name, defaultColor, defaultTransp, cb)
+    local color  = defaultColor or Color3.new(1,1,1)
+    local transp = defaultTransp or 0
+    local f = mkRow(self._body)
+    rowLbl(f, name)
+
+    local preview = N("Frame", {
+        Size = UDim2.new(0, 32, 0, 14),
+        Position = UDim2.new(1, -40, 0.5, -7),
+        BackgroundColor3 = color, BackgroundTransparency = transp,
+        BorderSizePixel = 0,
+    }, f)
+    C(3, preview); St(T.KBB, 1, preview)
+
+    local function setColor(c, t)
+        color = c; if t ~= nil then transp = t end
+        preview.BackgroundColor3 = color
+        preview.BackgroundTransparency = transp
+        if cb then cb(color, transp) end
+    end
+
+    local popup
+    local function closePicker() if popup then popup:Destroy(); popup = nil end end
+
+    local function openPicker()
+        if popup then closePicker(); return end
+        local gui = f:FindFirstAncestorOfClass("ScreenGui") or self._body
+        local mouse = UIS:GetMouseLocation()
+        popup = N("Frame", {
+            Size = UDim2.new(0, 180, 0, 160),
+            Position = UDim2.new(0, mouse.X + 10, 0, mouse.Y + 10),
+            BackgroundColor3 = T.BG, BorderSizePixel = 0, ZIndex = 500,
+        }, gui)
+        C(5, popup); St(T.LINE, 1, popup)
+
+        local rC = math.floor(color.R*255)
+        local gC = math.floor(color.G*255)
+        local bC = math.floor(color.B*255)
+        local tC = math.floor(transp*100)
+        local function apply() setColor(Color3.fromRGB(rC,gC,bC), tC/100) end
+
+        local function mkS(label, y, mn, mx, init, onCh)
+            N("TextLabel", {
+                Size = UDim2.new(0.25, 0, 0, 20),
+                Position = UDim2.new(0, 8, 0, y),
+                BackgroundTransparency = 1, Text = label,
+                TextColor3 = T.TXT, TextSize = 10,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                Font = Enum.Font.Gotham, ZIndex = 501,
+            }, popup)
+            local track = N("Frame", {
+                Size = UDim2.new(0.7, -14, 0, 4),
+                Position = UDim2.new(0.27, 0, 0, y + 8),
+                BackgroundColor3 = T.SLB, BorderSizePixel = 0, ZIndex = 501,
+            }, popup)
+            C(100, track)
+            local r0 = (init - mn) / (mx - mn)
+            local fill = N("Frame", {
+                Size = UDim2.new(r0, 0, 1, 0),
+                BackgroundColor3 = T.ACC, BorderSizePixel = 0, ZIndex = 501,
+            }, track); C(100, fill)
+            local knob = N("Frame", {
+                Size = UDim2.new(0, 8, 0, 8),
+                Position = UDim2.new(r0, -4, 0.5, -4),
+                BackgroundColor3 = Color3.new(1,1,1),
+                BorderSizePixel = 0, ZIndex = 502,
+            }, track); C(100, knob)
+            local dragging
+            local function upd(x)
+                local rr = math.clamp((x - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
+                local v = math.floor(mn + rr*(mx-mn) + 0.5)
+                fill.Size = UDim2.new(rr, 0, 1, 0)
+                knob.Position = UDim2.new(rr, -4, 0.5, -4)
+                onCh(v)
+            end
+            track.InputBegan:Connect(function(i)
+                if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = true; upd(i.Position.X) end
+            end)
+            UIS.InputChanged:Connect(function(i)
+                if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then upd(i.Position.X) end
+            end)
+            UIS.InputEnded:Connect(function(i)
+                if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+            end)
+        end
+
+        mkS("R", 6,  0, 255, rC, function(v) rC=v; apply() end)
+        mkS("G", 32, 0, 255, gC, function(v) gC=v; apply() end)
+        mkS("B", 58, 0, 255, bC, function(v) bC=v; apply() end)
+        mkS("A", 84, 0, 100, tC, function(v) tC=v; apply() end)
+
+        local cb2 = N("TextButton", {
+            Size = UDim2.new(0.4, 0, 0, 20),
+            Position = UDim2.new(0.3, 0, 1, -26),
+            BackgroundColor3 = T.KB, BorderSizePixel = 0, Text = "Close",
+            TextColor3 = T.TXT, TextSize = 10, Font = Enum.Font.Gotham, ZIndex = 502,
+        }, popup); C(3, cb2); St(T.KBB, 1, cb2)
+        cb2.MouseButton1Click:Connect(closePicker)
+    end
+
+    preview.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then openPicker() end
+    end)
+
+    local p = {Value = color, Transparency = transp}
+    function p:Set(c, t) setColor(c, t) end
+    return p
+end
+
+function Sec:AddInput(name, placeholder, default, cb)
+    local f = mkRow(self._body)
+    rowLbl(f, name)
+    local box = N("TextBox", {
+        Size = UDim2.new(0, 90, 0, 16),
+        Position = UDim2.new(1, -94, 0.5, -8),
+        BackgroundColor3 = T.KB, BorderSizePixel = 0,
+        Text = default or "", PlaceholderText = placeholder or "",
+        PlaceholderColor3 = T.TXT2, TextColor3 = T.TXT, TextSize = 10,
+        Font = Enum.Font.Gotham, ClearTextOnFocus = false,
+    }, f); C(3, box); St(T.KBB, 1, box)
+    box.FocusLost:Connect(function() if cb then cb(box.Text) end end)
+    local i = {Value = default or ""}
+    function i:Set(v) box.Text = v; i.Value = v; if cb then cb(v) end end
+    return i
+end
+
+function UILib:Notify(text, duration)
+    duration = duration or 3
+    local n = N("TextLabel", {
+        Size = UDim2.new(0, 260, 0, 32),
+        Position = UDim2.new(1, -280, 1, -50),
+        BackgroundColor3 = T.BG, BorderSizePixel = 0,
+        Text = "  " .. tostring(text), TextColor3 = T.TXT, TextSize = 12,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Font = Enum.Font.Gotham, ZIndex = 999,
+    }, self._gui)
+    C(5, n); St(T.ACC, 1, n)
+    task.delay(duration, function()
+        if n and n.Parent then
+            tw(n, {BackgroundTransparency = 1, TextTransparency = 1}, 0.3)
+            task.wait(0.35)
+            if n and n.Parent then n:Destroy() end
+        end
+    end)
+end
 ------------------------------------------------------------------------
 return UILib
